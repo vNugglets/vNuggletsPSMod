@@ -14,10 +14,10 @@ Inventory of nugglets in this repo:
 
 Name|Added|Description
 ----|-----|-----------
-<a id="inv_Get-VNNetworkClusterInfo.ps1"></a>Get-VNNetworkClusterInfo.ps1|29 Sep 2016|Get information about the VMware HA Cluster(s) in which the given virtual network (virtual portgroup) is defined
+<a id="inv_Get-VNNetworkClusterInfo"></a>Get-VNNetworkClusterInfo.ps1|29 Sep 2016|Get information about the VMware HA Cluster(s) in which the given virtual network (virtual portgroup) is defined
 
 
 A few notes on updates to this repo:
 
 Sep 2016
-- created repository, populated with first nugglet, [`Get-VNNetworkClusterInfo.ps1`](#inv_Get-VNNetworkClusterInfo.ps1)
+- created repository, populated with first nugglet, [`Get-VNNetworkClusterInfo.ps1`](#inv_Get-VNNetworkClusterInfo)
