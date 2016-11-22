@@ -39,10 +39,10 @@ function Get-VNNetworkClusterInfo {
     [OutputType([System.Management.Automation.PSCustomObject])]
     Param (
         ## Name pattern of virtual network for which to get information. This is a regular expression
-        [parameter(ParameterSetName="NameAsRegEx",Position=0)][String[]]$Name,
+        [parameter(Mandatory=$true,ParameterSetName="NameAsRegEx",Position=0)][String[]]$Name,
 
         ## Literal name of virtual network for which to get information.  This RegEx-escapes the string and adds start/end anchors ("^" and "$") so that the only match is an exact match
-        [parameter(ParameterSetName="NameAsLiteral",Position=0)][String[]]$LiteralName
+        [parameter(Mandatory=$true,ParameterSetName="NameAsLiteral",Position=0)][String[]]$LiteralName
     ) ## end param
 
     process {
@@ -73,47 +73,82 @@ function Get-VNNetworkClusterInfo {
 } ## end function
 
 
+
+function Get-VNVMHostBrokenUplink {
+    <#  .Description
+        For the given VMHost(s), list all VMNICs that are connected to a virtual standard switch (vSSwitch), but that have no link
+
+        .Example
+         Get-VNVMHostBrokenUplink
+
+        VMHost            vSwitch   BustedVmnic  BitRatePerSec
+        ------            -------   -----------  -------------
+        myhost03.dom.com  vSwitch0  vmnic1                   0
+        myhost22.dom.com  vSwitch5  vmnic7                   0
+        myhost24.dom.com  vSwitch1  vmnic3                   0
+
+        Get information for all VMHost's vSSwitches' uplinks
+
+        .Example
+         Get-VNVMHostBrokenUplink -LiteralName myhost24.dom.com
+
+        VMHost            vSwitch   BustedVmnic  BitRatePerSec
+        ------            -------   -----------  -------------
+        myhost24.dom.com  vSwitch1  vmnic3                   0
+
+        Get information for the particular VMHost's vSSwitches' uplinks
+    #>
+
+    [CmdletBinding(DefaultParameterSetName="NameAsRegEx")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    Param (
+        ## Name pattern of VMHost for which to get information. This is a regular expression. If none specified, will check all VMHosts
+        [parameter(ParameterSetName="NameAsRegEx",Position=0)][String[]]$Name = ".+",
+
+        ## Literal name of VMHost for which to get information.  This RegEx-escapes the string and adds start/end anchors ("^" and "$") so that the only match is an exact match
+        [parameter(Mandatory=$true,ParameterSetName="NameAsLiteral",Position=0)][String[]]$LiteralName
+    ) ## end param
+
+    process {
+        $hshParamForNewRegExPattern = Switch ($PsCmdlet.ParameterSetName) {
+            "NameAsRegEx" {@{String = $Name; EscapeAsLiteral = $false}; break}
+            ## if literal, do escape as literal
+            "NameAsLiteral" {@{String = $LiteralName; EscapeAsLiteral = $true}}
+        } ## end switch
+
+        ## make the actual RegEx pattern, joining all values, and escaping if strings are to be literal
+        $strVMHostNameFilter = _New-RegExJoinedOrPattern @hshParamForNewRegExPattern
+
+        ## get all matching HostSystems, and for all of their vSwitches, find the Pnics that do not have a link or the link speed is 0
+        Get-View -ViewType HostSystem -Property Name, Config.Network.Vswitch, Config.Network.Pnic -Filter @{"Name" = $strVMHostNameFilter} | Foreach-Object {
+            $viewThisHost = $_
+            Write-Verbose "working on VMHost '$($viewThisHost.Name)'"
+            ## for each vSwitch (that has uplinks) on the host, check the Pnics
+            $viewThisHost.Config.Network.Vswitch | Where-Object {$_.Pnic} | Foreach-Object {
+                $oThisVswitch = $_
+                ## for each Pnic key in this vSwitch
+                $oThisVswitch.Pnic | Foreach-Object {
+                    $strPnicKey = $_
+                    ## get the actual Pnic, check its LinkSpeed
+                    $oPnic = $viewThisHost.Config.Network.Pnic | Where-Object {$_.key -eq $strPnicKey}
+                    if (($null -eq $oPnic.LinkSpeed) -or ($oPnic.LinkSpeed.SpeedMb -eq 0)) {
+                        ## create a new object with some info about the Pnic
+                        New-Object -Type PSObject -Property ([ordered]@{
+                            VMHost = $viewThisHost.Name
+                            vSwitch = $oThisVswitch.Name
+                            BustedVmnic = $oPnic.Device
+                            BitRatePerSec = if ($null -eq $oPnic.LinkSpeed.SpeedMb) {0} else {$oPnic.LinkSpeed.SpeedMb}
+                        }) ## end new-object
+                    } ## end if
+                } ## end foreach-object
+            } ## end foreach-object
+        } ## end foreach-object
+    } ## end process
+} ## end fn
+
+
+
 # ## other functions:
-# ## Get-BustedVmnic
-# <#  .Description
-#     Lists all VMNICs that have no link and that are connected to a virtual standard switch (vSSwitch)
-#     todo:  update to include support for vDSwitches
-# #>
-
-# [CmdletBinding()]
-# param(
-#     ## Name pattern for VMHost whose VMNics to check out
-#     [string]$VMHost_str = ".+"
-# ) ## end param
-
-# process {
-#     ## get all HostSystems, and for all of their vSwitches, find the Pnics that do not have a link or the link speed is 0
-#     Get-View -ViewType HostSystem -Property Name, Config.Network.Vswitch, Config.Network.Pnic -Filter @{"Name" = $VMHost_str} | Foreach-Object {
-#         $viewThisHost = $_
-#         Write-Verbose "working on VMHost '$($viewThisHost.Name)'"
-#         ## for each vSwitch (that has uplinks) on the host, check the Pnics
-#         $viewThisHost.Config.Network.Vswitch | Where-Object {$_.Pnic} | Foreach-Object {
-#             $oThisVswitch = $_
-#             ## for each Pnic key in this vSwitch
-#             $oThisVswitch.Pnic | Foreach-Object {
-#                 $strPnicKey = $_
-#                 ## get the actual Pnic, check its LinkSpeed
-#                 $oPnic = $viewThisHost.Config.Network.Pnic | ?{$_.key -eq $strPnicKey}
-#                 if (($oPnic.LinkSpeed -eq $null) -or ($oPnic.LinkSpeed.SpeedMb -eq 0)) {
-#                     ## create a new object with some info about the Pnic
-#                     New-Object -Type PSObject -Property @{
-#                         VMHost = $viewThisHost.Name
-#                         BustedVmnic = $oPnic.Device
-#                     } ## end new-object
-#                 } ## end if
-#             } ## end foreach-object
-#         } ## end foreach-object
-#     } ## end foreach-object
-# } ## end process
-
-
-
-
 # ## Get-VMByAddress
 # <#  .Description
 #     Find all VMs w/ a NIC w/ the given MAC address or IP address (by IP address relies on info returned from VMware Tools in the guest, so those must be installed). Matt Boren.  Get-by-MAC written Jul 2011. Updated Feb 2013 to include get-by-IP portion.

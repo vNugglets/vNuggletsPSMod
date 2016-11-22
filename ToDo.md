@@ -1,0 +1,20 @@
+### ToDo for vNugglets.Utility PowerShell module
+
+- update function `Get-VNVMHostBrokenUplink` to include:
+  - support for virtual distributed switches ("vDS" or "vDSwitches"); currently only supports virtual standard switches ("vSS")
+  - support for accepting VMHost ID from pipeline (by property), so that the following works tip top:  
+  `Get-Cluster myCluster | Get-VMHost | Get-VNVMHostBrokenUplink`
+
+
+
+
+
+### Doing
+
+\[feat_InitialModuleCreation]
+- function-ize the snippets on vNugglets, improving them as suitable
+
+### Done
+- improved:
+  - `Get-VNVMHostBrokenUplink` -- added more properties to returned object for more easily relating the given vmnic to the VMHost and vSwitch of which it is a part
+  
