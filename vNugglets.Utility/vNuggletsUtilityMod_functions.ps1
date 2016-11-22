@@ -39,18 +39,21 @@ function Get-VNNetworkClusterInfo {
     [OutputType([System.Management.Automation.PSCustomObject])]
     Param (
         ## Name pattern of virtual network for which to get information. This is a regular expression
-        [parameter(ParameterSetName="NameAsRegEx",Position=1)][String[]]$Name,
+        [parameter(ParameterSetName="NameAsRegEx",Position=0)][String[]]$Name,
 
         ## Literal name of virtual network for which to get information.  This RegEx-escapes the string and adds start/end anchors ("^" and "$") so that the only match is an exact match
-        [parameter(ParameterSetName="NameAsLiteral",Position=1)][String[]]$LiteralName
+        [parameter(ParameterSetName="NameAsLiteral",Position=0)][String[]]$LiteralName
     ) ## end param
 
     process {
-        $strNetworkNameFilter = Switch ($PsCmdlet.ParameterSetName) {
-            "NameAsRegEx" {$Name -join "|"}
-            ## if literal, RegEx escape the string and add start/end anchors
-            "NameAsLiteral" {($LiteralName | Foreach-Object {"^{0}$" -f [System.Text.RegularExpressions.Regex]::Escape($_)}) -join "|"}
+        $hshParamForNewRegExPattern = Switch ($PsCmdlet.ParameterSetName) {
+            "NameAsRegEx" {@{String = $Name; EscapeAsLiteral = $false}; break}
+            ## if literal, do escape as literal
+            "NameAsLiteral" {@{String = $LiteralName; EscapeAsLiteral = $true}}
         } ## end switch
+
+        ## make the actual RegEx pattern, joining all values, and escaping if strings are to be literal
+        $strNetworkNameFilter = _New-RegExJoinedOrPattern @hshParamForNewRegExPattern
 
         Get-View -ViewType Network -Property Name,Host -Filter @{Name = $strNetworkNameFilter} | Foreach-Object {
             ## get the updated View data for the network's hosts' parent's name
