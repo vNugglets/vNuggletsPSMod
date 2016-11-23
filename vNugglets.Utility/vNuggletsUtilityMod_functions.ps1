@@ -80,7 +80,6 @@ function Get-VNVMHostBrokenUplink {
 
         .Example
          Get-VNVMHostBrokenUplink
-
         VMHost            vSwitch   BustedVmnic  BitRatePerSec
         ------            -------   -----------  -------------
         myhost03.dom.com  vSwitch0  vmnic1                   0
@@ -91,12 +90,17 @@ function Get-VNVMHostBrokenUplink {
 
         .Example
          Get-VNVMHostBrokenUplink -LiteralName myhost24.dom.com
-
         VMHost            vSwitch   BustedVmnic  BitRatePerSec
         ------            -------   -----------  -------------
         myhost24.dom.com  vSwitch1  vmnic3                   0
 
         Get information for the particular VMHost's vSSwitches' uplinks
+
+        .Link
+        http://vNugglets.com
+
+        .Outputs
+        System.Management.Automation.PSCustomObject
     #>
 
     [CmdletBinding(DefaultParameterSetName="NameAsRegEx")]
@@ -148,57 +152,77 @@ function Get-VNVMHostBrokenUplink {
 
 
 
+function Get-VNVMByAddress {
+    <#  .Description
+        Find all VMs with a NIC that has the given MAC address or IP address (explicit or wildcard).   Matt Boren.  Get-by-MAC portion written Jul 2011.
+
+        .Example
+        Get-VMByAddress -MAC 00:50:56:b0:00:01
+        Name     MacAddress                              MoRef
+        ------   ------------                            -----
+        myvm0    {00:50:56:b0:00:01,00:50:56:b0:00:18}   VirtualMachine-vm-2155
+
+        Get VMs with given MAC address, return VM name and its MAC addresses
+
+        .Example
+        Get-VMByAddress -IP 10.37.31.12
+        Name     IP                                         MoRef
+        ------   ---                                        -----
+        myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13
+
+        Get VMs with given IP as reported by VMware Tools, return VM name and its IP addresses
+
+        .Example
+        Get-VMByAddress -AddressWildcard 10.0.0.*
+        Name           IP                                      MoRef
+        ----           --                                      -----
+        myvm3          {10.0.0.20, fe80::000:5600:fe00:6007}   VirtualMachine-vm-153
+        mytestVM001    10.0.0.200                              VirtualMachine-vm-162
+
+        Use -AddressWildcard to find VMs with approximate IP
+
+        .Link
+        http://vNugglets.com
+
+        .Notes
+        Finding VMs by IP address relies on information returned from VMware Tools in the guest, so those must be installed in the guest and have been running in the guest at least recently.
+
+        .Outputs
+        Selected.VMware.Vim.VirtualMachine
+    #>
+
+    [CmdletBinding(DefaultParametersetName="FindByMac")]
+    param (
+        ## MAC address in question, if finding VM by MAC; expects address in format "00:50:56:00:00:01"
+        [parameter(Mandatory=$true,ParameterSetName="FindByMac",Position=0)][string[]]$MAC,
+
+        ## IP address in question, for finding VM by IP.  Accepts IPv4 and IPv6 addresses
+        [parameter(Mandatory=$true,ParameterSetName="FindByIP",Position=0)][ValidateScript({[bool][System.Net.IPAddress]::Parse($_)})][string]$IP,
+
+        ## wildcard string IP address (standard wildcards like "10.0.0.*"), if finding VM by approximate IP
+        [parameter(Mandatory=$true,ParameterSetName="FindByIPWildcard",Position=0)][string]$AddressWildcard
+    ) ## end param
+
+    Process {
+        Switch ($PsCmdlet.ParameterSetName) {
+            "FindByMac" {
+                ## return the some info for the VM(s) with the NIC w/ the given MAC
+                Get-View -Viewtype VirtualMachine -Property Name, Config.Hardware.Device | Where-Object {$_.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualEthernetCard]) -and ($MAC -contains $_.MacAddress)}} | Select-Object Name, @{n="MacAddress"; e={$_.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualEthernetCard]} | Foreach-Object {$_.MacAddress} | Sort-Object}}, MoRef
+                break;
+            } ## end case
+            {"FindByIp","FindByIPWildcard" -contains $_} {
+                ## scriptblock to use for the Where clause in finding VMs
+                $sblkFindByIP_WhereStatement = if ($PsCmdlet.ParameterSetName -eq "FindByIPWildcard") {{$_.IpAddress | Where-Object {$_ -like $AddressWildcard}}} else {{$_.IpAddress -contains $IP}}
+                ## return the .Net View object(s) for the VM(s) with the NIC(s) w/ the given IP
+                Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object Name, @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, MoRef
+            } ## end case
+        } ## end switch
+    } ## end process
+} ## end fn
+
+
+
 # ## other functions:
-# ## Get-VMByAddress
-# <#  .Description
-#     Find all VMs w/ a NIC w/ the given MAC address or IP address (by IP address relies on info returned from VMware Tools in the guest, so those must be installed). Matt Boren.  Get-by-MAC written Jul 2011. Updated Feb 2013 to include get-by-IP portion.
-#     Updated Sep 2013 -- added FindByIPWildcard, so that one can find VMs that approximate IP, like "10.0.0.*"
-#     .Example
-#     Get-VMByAddress -MAC 00:50:56:b0:00:01
-#     VMName        MacAddress
-#     ------        ------------
-#     myvm0         00:50:56:b0:00:01,00:50:56:b0:00:18
-
-#     Get VMs with given MAC address, return VM name and its MAC addresses
-#     .Example
-#     Get-VMByAddress -IP 10.37.31.120 | ft -AutoSize
-#     VMName         IP
-#     ------         ---
-#     myvm10         192.168.133.1,192.168.253.1,10.37.31.120,fe80::1d10:c974:9eba:1ab9%14
-
-#     Get VMs with given IP as reported by Tools, return VM name and its IP addresses
-# #>
-
-# [CmdletBinding(DefaultParametersetName="FindByMac")]
-# param (
-#     ## MAC address in question, if finding VM by MAC; expects address in format "00:50:56:83:00:69"
-#     [parameter(Mandatory=$true,ParameterSetName="FindByMac")][string[]]$MAC,
-#     ## IP address in question, if finding VM by IP
-#     [parameter(Mandatory=$true,ParameterSetName="FindByIP")][ValidateScript({[bool][System.Net.IPAddress]::Parse($_)})][string]$IP,
-#     ## wildcard string IP address (standard wildcards like "10.0.0.*"), if finding VM by approximate IP
-#     [parameter(ParameterSetName="FindByIPWildcard")][string]$AddressWildcard
-# ) ## end param
-
-
-# Process {
-#     Switch ($PsCmdlet.ParameterSetName) {
-#         "FindByMac" {
-#             ## return the some info for the VM(s) with the NIC w/ the given MAC
-#             Get-View -Viewtype VirtualMachine -Property Name, Config.Hardware.Device | Where-Object {$_.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualEthernetCard]) -and ($MAC -contains $_.MacAddress)}} | select @{n="VMName"; e={$_.Name}},@{n="MacAddress"; e={($_.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualEthernetCard]} | Foreach-Object {$_.MacAddress} | sort) -join ","}}, MoRef
-#             break;
-#         } ## end case
-#         {"FindByIp","FindByIPWildcard" -contains $_} {
-#             ## scriptblock to use for the Where clause in finding VMs
-#             $sblkFindByIP_WhereStatement = if ($PsCmdlet.ParameterSetName -eq "FindByIPWildcard") {{$_.IpAddress | Where-Object {$_ -like $AddressWildcard}}} else {{$_.IpAddress -contains $IP}}
-#             ## return the .Net View object(s) for the VM(s) with the NIC(s) w/ the given IP
-#             Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select @{n="VMName"; e={$_.Name}}, @{n="IP"; e={($_.Guest.Net | Foreach-Object {$_.IpAddress} | sort) -join ","}}, MoRef
-#         } ## end case
-#     } ## end switch
-# } ## end process
-
-
-
-
 # ## Move-TemplateFromHost
 # <#  .Description
 #     Script function: move (by act of marking as VM, but on a different VMHost, and then marking back as template) templates from one VMhost to the rest of the hosts in the cluster (at random, for good dispersion). Does not move any disk/config files -- leverages API calls to essentially register template as VM on a different host, then mark as template again.
