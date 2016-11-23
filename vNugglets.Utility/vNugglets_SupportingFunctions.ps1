@@ -1,3 +1,5 @@
+## helper functions internal to this module
+
 function _New-RegExJoinedOrPattern {
 <#	.Description
 	Helper function to take one or more strings and return a "joined" OR string (join values with "|"), and optionally RegEx escaping the input strings if specified
@@ -19,3 +21,19 @@ function _New-RegExJoinedOrPattern {
 		else {$String -join "|"}
 	} ## end process
 } ## end fn
+
+
+
+function _Format-AsHexWWNString {
+<#	.Description
+	Helper function for formatting WWN as hex string with colon-separators
+	.Outputs
+	String
+#>
+    param(
+		## the WWN in [long] format (not in hex, yet)
+    	[parameter(Mandatory=$true)][long]$WWN_long
+    )
+    ## convert to hex and then create a string with colons separating every two hex characters
+    process {(("{0:x}" -f $WWN_long) -split "(\w{2})" | Where-Object {$_ -ne ""}) -join ":"}
+} ## end function

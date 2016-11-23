@@ -1,40 +1,39 @@
 function Get-VNNetworkClusterInfo {
-    <#  .Description
-        Get information about the VMware HA Cluster(s) in which the given virtual network (virtual portgroup) is defined. May 2015
+<#  .Description
+    Get information about the VMware HA Cluster(s) in which the given virtual network (virtual portgroup) is defined. May 2015
 
-        .Synopsis
-        Get VMware HA Cluster info for a virtual network
+    .Synopsis
+    Get VMware HA Cluster info for a virtual network
 
-        .Example
-        Get-VNNetworkClusterInfo 101,234
-        Name           ClusterName  ClusterId           Type                                    MoRef
-        ----           -----------  ---------           ----                                    -----
-        my.Portgrp101  myCluster0   ClusterCom...n-c94  VMware.Vim.Network                      Network-network-3588
-        my.Portgrp234  myCluster20  ClusterCom...n-c99  VMware.Vim.DistributedVirtualPortgroup  Network-network-4687
+    .Example
+    Get-VNNetworkClusterInfo 101,234
+    Name           ClusterName  ClusterId           Type                                    MoRef
+    ----           -----------  ---------           ----                                    -----
+    my.Portgrp101  myCluster0   ClusterCom...n-c94  VMware.Vim.Network                      Network-network-3588
+    my.Portgrp234  myCluster20  ClusterCom...n-c99  VMware.Vim.DistributedVirtualPortgroup  Network-network-4687
 
-        Gets information about virtual networks whose names match the (very simple) regular expressions, "101" and "121", returning an object for each matching network with network name and cluster name/ID properties
+    Gets information about virtual networks whose names match the (very simple) regular expressions, "101" and "121", returning an object for each matching network with network name and cluster name/ID properties
 
-        .Example
-        Get-VNNetworkClusterInfo -LiteralName my.Portgroup0 | ft -a
-        Name           ClusterName  ClusterId                          Type                MoRef
-        ----           -----------  ---------                          ----                -----
-        my.Portgroup0  myCluster0   ClusterComputeResource-domain-c94  VMware.Vim.Network  Network-network-3588
+    .Example
+    Get-VNNetworkClusterInfo -LiteralName my.Portgroup0 | ft -a
+    Name           ClusterName  ClusterId                          Type                MoRef
+    ----           -----------  ---------                          ----                -----
+    my.Portgroup0  myCluster0   ClusterComputeResource-domain-c94  VMware.Vim.Network  Network-network-3588
 
-        Gets information about virtual networks whose names are literally "my.Portgroup0" (not matching "my.Portgroup01" or "test_myXPortgroup0" -- just a literal match only), returning an object with network name and cluster name/ID properties
+    Gets information about virtual networks whose names are literally "my.Portgroup0" (not matching "my.Portgroup01" or "test_myXPortgroup0" -- just a literal match only), returning an object with network name and cluster name/ID properties
 
-        .Link
-        http://vNugglets.com
+    .Link
+    http://vNugglets.com
 
-        .Notes
-        This code also gives a nice example of using LinkedViews in .NET View objects to most quickly/efficiently get information about related objects in the vSphere environment.
+    .Notes
+    This code also gives a nice example of using LinkedViews in .NET View objects to most quickly/efficiently get information about related objects in the vSphere environment.
 
-        .Inputs
-        String -- network (virtual portgroup) name pattern(s) or literal name(s)
+    .Inputs
+    String -- network (virtual portgroup) name pattern(s) or literal name(s)
 
-        .Outputs
-        System.Management.Automation.PSCustomObject
-    #>
-
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
     [CmdletBinding(DefaultParameterSetName="NameAsRegEx")]
     [OutputType([System.Management.Automation.PSCustomObject])]
     Param (
@@ -75,34 +74,33 @@ function Get-VNNetworkClusterInfo {
 
 
 function Get-VNVMHostBrokenUplink {
-    <#  .Description
-        For the given VMHost(s), list all VMNICs that are connected to a virtual standard switch (vSSwitch), but that have no link
+<#  .Description
+    For the given VMHost(s), list all VMNICs that are connected to a virtual standard switch (vSSwitch), but that have no link
 
-        .Example
-         Get-VNVMHostBrokenUplink
-        VMHost            vSwitch   BustedVmnic  BitRatePerSec
-        ------            -------   -----------  -------------
-        myhost03.dom.com  vSwitch0  vmnic1                   0
-        myhost22.dom.com  vSwitch5  vmnic7                   0
-        myhost24.dom.com  vSwitch1  vmnic3                   0
+    .Example
+     Get-VNVMHostBrokenUplink
+    VMHost            vSwitch   BustedVmnic  BitRatePerSec
+    ------            -------   -----------  -------------
+    myhost03.dom.com  vSwitch0  vmnic1                   0
+    myhost22.dom.com  vSwitch5  vmnic7                   0
+    myhost24.dom.com  vSwitch1  vmnic3                   0
 
-        Get information for all VMHost's vSSwitches' uplinks
+    Get information for all VMHost's vSSwitches' uplinks
 
-        .Example
-         Get-VNVMHostBrokenUplink -LiteralName myhost24.dom.com
-        VMHost            vSwitch   BustedVmnic  BitRatePerSec
-        ------            -------   -----------  -------------
-        myhost24.dom.com  vSwitch1  vmnic3                   0
+    .Example
+     Get-VNVMHostBrokenUplink -LiteralName myhost24.dom.com
+    VMHost            vSwitch   BustedVmnic  BitRatePerSec
+    ------            -------   -----------  -------------
+    myhost24.dom.com  vSwitch1  vmnic3                   0
 
-        Get information for the particular VMHost's vSSwitches' uplinks
+    Get information for the particular VMHost's vSSwitches' uplinks
 
-        .Link
-        http://vNugglets.com
+    .Link
+    http://vNugglets.com
 
-        .Outputs
-        System.Management.Automation.PSCustomObject
-    #>
-
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
     [CmdletBinding(DefaultParameterSetName="NameAsRegEx")]
     [OutputType([System.Management.Automation.PSCustomObject])]
     Param (
@@ -153,45 +151,45 @@ function Get-VNVMHostBrokenUplink {
 
 
 function Get-VNVMByAddress {
-    <#  .Description
-        Find all VMs with a NIC that has the given MAC address or IP address (explicit or wildcard).   Matt Boren.  Get-by-MAC portion written Jul 2011.
+<#  .Description
+    Find all VMs with a NIC that has the given MAC address or IP address (explicit or wildcard).  Get-by-MAC portion written Jul 2011.
 
-        .Example
-        Get-VMByAddress -MAC 00:50:56:b0:00:01
-        Name     MacAddress                              MoRef
-        ------   ------------                            -----
-        myvm0    {00:50:56:b0:00:01,00:50:56:b0:00:18}   VirtualMachine-vm-2155
+    .Example
+    Get-VNVMByAddress -MAC 00:50:56:b0:00:01
+    Name     MacAddress                              MoRef
+    ------   ------------                            -----
+    myvm0    {00:50:56:b0:00:01,00:50:56:b0:00:18}   VirtualMachine-vm-2155
 
-        Get VMs with given MAC address, return VM name and its MAC addresses
+    Get VMs with given MAC address, return VM name and its MAC addresses
 
-        .Example
-        Get-VMByAddress -IP 10.37.31.12
-        Name     IP                                         MoRef
-        ------   ---                                        -----
-        myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13
+    .Example
+    Get-VNVMByAddress -IP 10.37.31.12
+    Name     IP                                         MoRef
+    ------   ---                                        -----
+    myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13
 
-        Get VMs with given IP as reported by VMware Tools, return VM name and its IP addresses
+    Get VMs with given IP as reported by VMware Tools, return VM name and its IP addresses
 
-        .Example
-        Get-VMByAddress -AddressWildcard 10.0.0.*
-        Name           IP                                      MoRef
-        ----           --                                      -----
-        myvm3          {10.0.0.20, fe80::000:5600:fe00:6007}   VirtualMachine-vm-153
-        mytestVM001    10.0.0.200                              VirtualMachine-vm-162
+    .Example
+    Get-VNVMByAddress -AddressWildcard 10.0.0.*
+    Name           IP                                      MoRef
+    ----           --                                      -----
+    myvm3          {10.0.0.20, fe80::000:5600:fe00:6007}   VirtualMachine-vm-153
+    mytestVM001    10.0.0.200                              VirtualMachine-vm-162
 
-        Use -AddressWildcard to find VMs with approximate IP
+    Use -AddressWildcard to find VMs with approximate IP
 
-        .Link
-        http://vNugglets.com
+    .Link
+    http://vNugglets.com
 
-        .Notes
-        Finding VMs by IP address relies on information returned from VMware Tools in the guest, so those must be installed in the guest and have been running in the guest at least recently.
+    .Notes
+    Finding VMs by IP address relies on information returned from VMware Tools in the guest, so those must be installed in the guest and have been running in the guest at least recently.
 
-        .Outputs
-        Selected.VMware.Vim.VirtualMachine
-    #>
-
+    .Outputs
+    Selected.VMware.Vim.VirtualMachine
+#>
     [CmdletBinding(DefaultParametersetName="FindByMac")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
     param (
         ## MAC address in question, if finding VM by MAC; expects address in format "00:50:56:00:00:01"
         [parameter(Mandatory=$true,ParameterSetName="FindByMac",Position=0)][string[]]$MAC,
@@ -208,7 +206,7 @@ function Get-VNVMByAddress {
             "FindByMac" {
                 ## return the some info for the VM(s) with the NIC w/ the given MAC
                 Get-View -Viewtype VirtualMachine -Property Name, Config.Hardware.Device | Where-Object {$_.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualEthernetCard]) -and ($MAC -contains $_.MacAddress)}} | Select-Object Name, @{n="MacAddress"; e={$_.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualEthernetCard]} | Foreach-Object {$_.MacAddress} | Sort-Object}}, MoRef
-                break;
+                break
             } ## end case
             {"FindByIp","FindByIPWildcard" -contains $_} {
                 ## scriptblock to use for the Where clause in finding VMs
@@ -217,6 +215,152 @@ function Get-VNVMByAddress {
                 Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object Name, @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, MoRef
             } ## end case
         } ## end switch
+    } ## end process
+} ## end fn
+
+
+
+function Get-VNVMEVCInfo {
+<#  .Description
+    Code to get VMs' EVC mode and that of the cluster in which the VMs reside.  May 2014, Matt Boren
+    .Example
+    Get-VNVMEVCInfo -Cluster myCluster | ?{$_.VMEVCMode -ne $_.ClusterEVCMode}
+    Name        PowerState   VMEVCMode   ClusterEVCMode   ClusterName
+    ----        ----------   ---------   --------------   -----------
+    myvm001     poweredOff               intel-nehalem    myCluster0
+    myvm100     poweredOff               intel-nehalem    myCluster0
+
+    Get all VMs in given clusters where the VM's EVC mode does not match the Cluster's EVC mode
+
+    .Example
+    Get-VM myVM | Get-VNVMEVCInfo
+    Get the EVC info for the given VM and the cluster in which it resides
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding(DefaultParameterSetName="ByCluster")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    param(
+        ## Cluster name pattern (regex) to use for getting the clusters whose VMs to get
+        [parameter(ParameterSetName="ByCluster",Position=0)][string]$Cluster = ".+",
+
+        ## Id/MoRef of VM for which to get EVC info
+        [parameter(ValueFromPipelineByPropertyName=$true,ParameterSetName="ByVMId",Position=0)][Alias("Id","MoRef")][string[]]$VMId
+    ) ## end param
+
+    begin {
+        $hshParamForGetVMView = @{Property = "Name","Runtime.PowerState","Summary.Runtime.MinRequiredEVCModeKey"}
+        ## helper function to create a new info object
+        function _New-InfoObj ([VMware.Vim.VirtualMachine]$VMView, [string]$ClusterEVCModeKey, [string]$ClusterName) {
+            New-Object -Type PSObject -Property ([ordered]@{
+                Name = $VMView.Name
+                PowerState = $VMView.Runtime.PowerState
+                VMEVCMode = $VMView.Summary.Runtime.MinRequiredEVCModeKey
+                ClusterEVCMode = $ClusterEVCModeKey
+                ClusterName = $ClusterName
+            })
+        } ## end helper fn
+    } ## end begin
+
+    process {
+        ## on VirtualMachine View objects
+        #.Summary.Runtime.MinRequiredEVCModeKey
+        ## on ClusterComputeResource, though, not necessarily there, so needed to just get .Summary in the Get-View call
+        #.Summary.CurrentEVCModeKey
+
+        Switch ($PSCmdlet.ParameterSetName) {
+            "ByCluster" {
+                Get-View -ViewType ClusterComputeResource -Property Name,Summary -Filter @{"Name" = $Cluster} | Foreach-Object {
+                    $viewThisCluster = $_
+                    Get-View -ViewType VirtualMachine @hshParamForGetVMView -SearchRoot $viewThisCluster.MoRef | Foreach-Object {
+                        _New-InfoObj -VMView $_ -ClusterEVCModeKey $viewThisCluster.Summary.CurrentEVCModeKey -ClusterName $viewThisCluster.Name
+                    } ## end foreach-object
+                } ## end foreach-object
+                break
+            } ## end case
+            "ByVMId" {
+                Get-View @hshParamForGetVMView -Id $VMId | Foreach-Object {
+                    ## update the View data to get the cluster name and the cluster summary (which has the cluster's EVCMode)
+                    $_.UpdateViewData("Runtime.Host.Parent.Name")
+                    $_.Runtime.LinkedView.Host.LinkedView.Parent.UpdateViewData("Summary")
+                    _New-InfoObj -VMView $_ -ClusterEVCModeKey $_.Runtime.LinkedView.Host.LinkedView.Parent.Summary.CurrentEVCModeKey -ClusterName $_.Runtime.LinkedView.Host.LinkedView.Parent.Name
+                } ## end foreach-object
+            } ## end case
+        } ## end switch
+    } ## end process
+} ## end fn
+
+
+
+function Get-VNVMHostHBAWWN {
+<#  .Description
+    Get the Port- and Node WWNs for HBA(s) in VMHost(s)
+
+    .Example
+    Get-VMHost myVMHost.dom.com | Get-VMHostHBAWWN
+    VMHostName        DeviceName  HBAPortWWN               HBANodeWWN               HBAStatus
+    ----------        ----------  ----------               ----------               ---------
+    myVMHost.dom.com  vmhba2      10:00:00:00:aa:bb:cc:53  20:00:00:00:aa:bb:cc:53  online
+    myVMHost.dom.com  vmhba3      10:00:00:00:aa:bb:cc:86  20:00:00:00:aa:bb:cc:86  online
+
+    Get the HBA WWNs for host myVMHost
+
+    .Example
+    Get-Cluster mycluster | Get-VMHostHBAWWN
+    Get the HBA WWNs for hosts in the cluster "mycluster"
+
+    .Example
+    Get-VMHostHBAWWN -VMHostName myvmhost.*
+    Get the HBA WWNs for hosts whose name match the regular expression pattern myvmhost.*
+
+    .Example
+    Get-VMHostHBAWWN -VMHostName ^as.+
+    Get the HBA WWNs for hosts whose name match the regular expression pattern ^as.+
+
+    .Link
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding()]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    Param(
+        ## Name pattern of the host for which to get HBA info (treated as a RegEx pattern)
+        [parameter(Mandatory=$true,ParameterSetName="SearchByHostName")][string]$VMHostName,
+        ## The ID (MoRef) the host for which to get HBA info
+        [parameter(Mandatory=$true,ParameterSetName="SearchByHostId",ValueFromPipelineByPropertyName=$true)][Alias("Id")][string]$VMHostId,
+        ## The cluster for whose hosts to get HBA info
+        [parameter(Mandatory=$true,ParameterSetName="SearchByCluster",ValueFromPipeline=$true)][VMware.VimAutomation.ViCore.Types.V1.Inventory.Cluster]$Cluster
+    ) ## end param
+
+    Process {
+        ## params for the Get-View expression for getting the View objects
+        $hshGetViewParams = @{
+            Property = "Name", "Config.StorageDevice.HostBusAdapter"
+        } ## end hashtable
+        Switch ($PsCmdlet.ParameterSetName) {
+            "SearchByHostId" {$hshGetViewParams["Id"] = $VMHostId; break}
+            {"SearchByHostName","SearchByCluster" -contains $_} {$hshGetViewParams["ViewType"] = "HostSystem"}
+            ## if host name pattern was provided, filter on it in the Get-View expression
+            "SearchByHostName" {$hshGetViewParams["Filter"] = @{"Name" = $VMHostName}; break} ## end case
+            ## if cluster name pattern was provided, set it as the search root for the Get-View expression
+            "SearchByCluster" {$hshGetViewParams["SearchRoot"] = $Cluster.Id; break}
+        } ## end switch
+
+        Get-View @hshGetViewParams | Foreach-Object {
+            $viewHost = $_
+            $viewHost.Config.StorageDevice.HostBusAdapter | Where-Object {$_ -is [VMware.Vim.HostFibreChannelHba]} | Foreach-Object {
+                New-Object -TypeName PSObject -Property ([ordered]@{
+                    VMHostName = $viewHost.Name
+                    DeviceName = $_.Device
+                    HBAPortWWN = _Format-AsHexWWNString -WWN $_.PortWorldWideName
+                    HBANodeWWN = _Format-AsHexWWNString -WWN $_.NodeWorldWideName
+                    HBAStatus = $_.Status
+                }) ## end new-object
+            } ## end foreach-object
+        } ## end foreach-object
     } ## end process
 } ## end fn
 
@@ -906,133 +1050,4 @@ function Get-VNVMByAddress {
 #     ## else, say so
 #     else {Write-Verbose "Booo. No matching disk device with canonical name in '$CanonicalName' found attached to a VM as an RDM in cluster '$ClusterName'"}
 # }
-
-
-
-
-# ## Get-VMHostHBAWWN
-# <#  .Description
-#     Get the Port- and Node WWN(s) for HBA(s) in host(s). Feb 2012, Matt Boren.
-#     Updated Nov 2013:  added HBA device name, Matt Boren
-#     Updated May 2014:  rewrote to remove Invoke-Expression and use parameter splatting, instead; added ValueFromPipelineByPropertyName for Cluster; made function for formatting the WWN
-#     Updated May 2015, Matt Boren:  added take VMHost ID from pipeline bye property name, changed Cluster to take cluster object from pipeline (instead of cluster name)
-#     .Example
-#     Get-VMHostHBAWWN -host myvmhost.*
-#     Get the HBA WWNs for hosts whose name match the pattern myvmhost*
-#     .Example
-#     Get-VMHostHBAWWN -host ^as.+
-#     Get the HBA WWNs for hosts whose name match the pattern ^as.+
-#     .Example
-#     Get-VMHost myVMHost.dom.com | Get-VMHostHBAWWN
-#     Get the HBA WWNs for host myVMHost
-#     .Example
-#     Get-Cluster mycluster | Get-VMHostHBAWWN
-#     Get the HBA WWNs for hosts in the cluster "mycluster"
-# #>
-# [CmdletBinding()]
-# Param(
-#     ## the name pattern of the host for which to get HBA info (accepts regex patterns)
-#     [parameter(Mandatory=$true,ParameterSetName="SearchByHostName")][string]$HostName,
-#     ## The ID (MoRef) the host for which to get HBA info
-#     [parameter(Mandatory=$true,ParameterSetName="SearchByHostId",ValueFromPipelineByPropertyName=$true)][Alias("Id")][string]$VMHostId,
-#     ## The cluster for whose hosts to get HBA info
-#     [parameter(Mandatory=$true,ParameterSetName="SearchByCluster",ValueFromPipeline=$true)][VMware.VimAutomation.ViCore.Impl.V1.Inventory.ClusterImpl]$Cluster
-# ) ## end param
-# Begin {
-#     ## helper function for formatting WWN as hex string with colon-separators
-#     function _Format-AsHexWWNString {
-#         param([parameter(Mandatory=$true)][long]$WWN_long)
-#         (("{0:x}" -f $WWN_long) -split "(\w{2})" | Where-Object {$_ -ne ""}) -join ":"
-#     } ## end function
-# }
-
-# Process {
-#     ## params for the Get-View expression for getting the View objects
-#     $hshGetViewParams = @{
-#         Property = "Name", "Config.StorageDevice.HostBusAdapter"
-#     } ## end hashtable
-#     Switch ($PsCmdlet.ParameterSetName) {
-#         "SearchByHostId" {$hshGetViewParams["Id"] = $VMHostId; break}
-#         {"SearchByHostName","SearchByCluster" -contains $_} {$hshGetViewParams["ViewType"] = "HostSystem"}
-#         ## if host name pattern was provided, filter on it in the Get-View expression
-#         "SearchByHostName" {$hshGetViewParams["Filter"] = @{"Name" = $HostName}; break} ## end case
-#         ## if cluster name pattern was provided, set it as the search root for the Get-View expression
-#         "SearchByCluster" {$hshGetViewParams["SearchRoot"] = $Cluster.Id; break}
-#     } ## end switch
-
-#     Get-View @hshGetViewParams | Foreach-Object {
-#         $viewHost = $_
-#         $viewHost.Config.StorageDevice.HostBusAdapter | Where-Object {$_ -is [VMware.Vim.HostFibreChannelHba]} | Foreach-Object {
-#             New-Object -TypeName PSObject -Property ([ordered]@{
-#                 VMHostName = $viewHost.Name
-#                 DeviceName = $_.Device
-#                 HBAPortWWN = _Format-AsHexWWNString -WWN $_.PortWorldWideName
-#                 HBANodeWWN = _Format-AsHexWWNString -WWN $_.NodeWorldWideName
-#                 HBAStatus = $_.Status
-#             }) ## end new-object
-#         } ## end foreach-object
-#     } ## end foreach-object
-# } ## end process
-
-
-
-
-# ## Get-VMEVCInfo
-# <#  .Description
-#     Code to get VMs' EVC mode and that of the cluster in which the VMs reside.  May 2014, Matt Boren
-#     .Example
-#     Get-VMEVCInfo -Cluster myCluster | ?{$_.VMEVCMode -ne $_.ClusterEVCMode}
-#     Get all VMs in given clusters and return, for each, an object with the VM's- and its cluster's EVC mode, if any
-#     .Example
-#     Get-VM myVM | Get-VMEVCInfo
-#     Get the EVC info for the given VM and the cluster in which it resides
-#     .Outputs
-#     PSCustomObject
-# #>
-# [CmdletBinding(DefaultParameterSetName="ByCluster")]
-# param(
-#     ## Cluster name pattern (regex) to use for getting the clusters whose VMs to get
-#     [parameter(ParameterSetName="ByCluster")][string]$Cluster = ".+",
-#     ## Id/MoRef of VM for which to get EVC info
-#     [parameter(ValueFromPipelineByPropertyName=$true, ParameterSetName="ByVMId")][Alias("Id","MoRef")][string[]]$VMId
-# )
-
-# begin {
-#     $hshParamForGetVMView = @{Property = "Name","Runtime.PowerState","Summary.Runtime.MinRequiredEVCModeKey"}
-#     ## helper function to create a new info object
-#     function _New-InfoObj ([VMware.Vim.VirtualMachine]$VMView, [string]$ClusterEVCModeKey, [string]$ClusterName) {
-#         New-Object -Type PSObject -Property ([ordered]@{
-#             Name = $VMView.Name
-#             PowerState = $VMView.Runtime.PowerState
-#             VMEVCMode = $VMView.Summary.Runtime.MinRequiredEVCModeKey
-#             ClusterEVCMode = $ClusterEVCModeKey
-#             ClusterName = $ClusterName
-#         })
-#     }
-# }
-
-# process {
-#     ## on VirtualMachine View objects
-#     #.Summary.Runtime.MinRequiredEVCModeKey
-#     ## on ClusterComputeResource, though, not necessarily there, so needed to just get .Summary in the Get-View call
-#     #.Summary.CurrentEVCModeKey
-
-#     Switch ($PSCmdlet.ParameterSetName) {
-#         "ByCluster" {
-#             Get-View -ViewType ClusterComputeResource -Property Name,Summary -Filter @{"Name" = $Cluster} | Foreach-Object {
-#                 $viewThisCluster = $_
-#                 Get-View -ViewType VirtualMachine @hshParamForGetVMView -SearchRoot $viewThisCluster.MoRef | Foreach-Object {
-#                     _New-InfoObj -VMView $_ -ClusterEVCModeKey $viewThisCluster.Summary.CurrentEVCModeKey -ClusterName $viewThisCluster.Name
-#                 } ## end foreach-object
-#             } ## end foreach-object
-#         }
-#         "ByVMId" {
-#             Get-View @hshParamForGetVMView -Id $VMId | Foreach-Object {
-#                 $_.UpdateViewData("Runtime.Host.Parent.Name")
-#                 $_.Runtime.LinkedView.Host.LinkedView.Parent.UpdateViewData("Summary")
-#                 _New-InfoObj -VMView $_ -ClusterEVCModeKey $_.Runtime.LinkedView.Host.LinkedView.Parent.Summary.CurrentEVCModeKey -ClusterName $_.Runtime.LinkedView.Host.LinkedView.Parent.Name
-#             } ## end foreach-object
-#         }
-#     } ## end switch
-# } ## end process
 
