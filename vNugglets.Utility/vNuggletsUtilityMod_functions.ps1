@@ -366,85 +366,86 @@ function Get-VNVMHostHBAWWN {
 
 
 
-# ## other functions:
-# ## Move-TemplateFromHost
-# <#  .Description
-#     Script function: move (by act of marking as VM, but on a different VMHost, and then marking back as template) templates from one VMhost to the rest of the hosts in the cluster (at random, for good dispersion). Does not move any disk/config files -- leverages API calls to essentially register template as VM on a different host, then mark as template again.
-#     Author: vNugglets.com -- Aug 2011
-#     .Example
-#     Move-TemplateFromHost -VMHost (Get-VMHost myhost.dom.com) -DestinationCluster someOtherCluster
-#     Moves templates from myhost.dom.com to random available hosts in someOtherCluster
-#     .Example
-#     Get-VMHost myhost.dom.com | Move-TemplateFromHost -Verbose
-#     Moves templates from myhost.dom.com to random available hosts in same cluster as myhost.dom.com
-#     .Outputs
-#     VMware.VimAutomation.Types.Template of each moved template
-# #>
-# [CmdletBinding(SupportsShouldProcess=$true)]
-# [OutputType([VMware.VimAutomation.Types.Template])]
-# param(
-#     ## VMHost from which to evacuate templates
-#     [parameter(ValueFromPipeline=$true, Mandatory=$true)][VMware.VimAutomation.Types.VMHost]$VMHost,
-#     ## Name of DRS cluster to which to move templates; if not specified, templates will be moved to other available hosts in the same cluster as the source VMHost
-#     [string]$DestinationCluster
-# ) ## end param
+function Move-VNTemplateFromVMHost {
+<#  .Description
+    Function to move (by act of marking as VM, but on a different VMHost, and then marking back as template) templates from one VMhost to the rest of the hosts in the cluster (at random, for good dispersion). Does not move any disk/config files -- leverages API calls to essentially register template as VM on a different host, then mark as template again.
+
+    .Example
+    Move-VNTemplateFromVMHost -VMHost (Get-VMHost myhost.dom.com) -DestinationCluster (Get-Cluster someOtherCluster)
+    Moves templates from myhost.dom.com to random available hosts in someOtherCluster
+
+    .Example
+    Get-VMHost myhost.dom.com | Move-VNTemplateFromVMHost -Verbose
+    Moves templates from myhost.dom.com to random available hosts in same cluster as myhost.dom.com
+
+    .Link
+    http://vNugglets.com
+
+    .Outputs
+    VMware.VimAutomation.Types.Template of each moved template
+#>
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    [OutputType([VMware.VimAutomation.Types.Template])]
+    param(
+        ## VMHost from which to evacuate templates
+        [parameter(ValueFromPipeline=$true, Mandatory=$true)][VMware.VimAutomation.Types.VMHost]$VMHost,
+        ## VMHost cluster to which to move templates; if not specified, templates will be moved to other available VMHosts in the same cluster as the source VMHost
+        [VMware.VimAutomation.Types.Cluster]$DestinationCluster
+    ) ## end param
 
 
-# begin {
-#     ## name of resource pool in the cluster into which to migrate the template (default ResPool name is "Resources")
-#     $strDestResPoolName = "Resources"
-# } ## end begin
+    begin {
+        ## name of resource pool in the cluster into which to migrate the template (name of default ResourcePool in a cluster is "Resources")
+        $strDestResPoolName = "Resources"
+    } ## end begin
 
-# process {
-#     ## full name of VMHost from which to move templates
-#     $strSourceVMHostName = $VMHost.Name
+    process {
+        ## full name of VMHost from which to move templates
+        $strSourceVMHostName = $VMHost.Name
 
-#     ## .NET View object of VMHost on which templates reside
-#     # $viewSourceVMHost = Get-View -ViewType HostSystem -Property Parent -Filter @{"Name" = [RegEx]::escape($strSourceVMHostName)}
-#     $viewSourceVMHost = Get-View -Id $VMHost.Id -Property Parent
-#     ## if some number of hosts other than 1 was found
-#     if (($viewSourceVMHost | Measure-Object).Count -ne 1) {Throw "Hostname not found or more than one match"}
+        ## .NET View object of VMHost on which templates reside
+        # $viewSourceVMHost = Get-View -ViewType HostSystem -Property Parent -Filter @{"Name" = [RegEx]::escape($strSourceVMHostName)}
+        $viewSourceVMHost = Get-View -Id $VMHost.Id -Property Parent
+        ## if some number of hosts other than 1 was found
+        if (($viewSourceVMHost | Measure-Object).Count -ne 1) {Throw "Either zero or more than one VMHost View found; connected to only the vCenter in which VMHost resides? (error when getting View of VMHost)"}
 
-#     ## .NET View object of cluster in which the VMHost (and, so, templates) reside
-#     $viewTemplsCluster = Get-View -Id $viewSourceVMHost.Parent -Property Name
-#     ## the .NET View object of destination cluster to which to move templates (may be the same as source)
-#     $viewDestCluster = if ($PSBoundParameters.ContainsKey("DestinationCluster")) {Get-View -ViewType ClusterComputeResource -Property Name -Filter @{"Name" = "^${DestinationCluster}$"}} else {$viewTemplsCluster}
+        ## .NET View object of cluster in which the VMHost (and, so, templates) reside
+        $viewTemplsCluster = Get-View -Id $viewSourceVMHost.Parent -Property Name
+        ## the .NET View object of destination cluster to which to move templates (may be the same as source)
+        $viewDestCluster = if ($PSBoundParameters.ContainsKey("DestinationCluster")) {Get-View -Property Name -Id $DestinationCluster.Id} else {$viewTemplsCluster}
 
-#     ## make sure that only one destination cluster was found
-#     if (-not $viewDestCluster) {Throw "No destination cluster of name '$DestinationCluster' found. Valid cluster name?"}
-#     if (($viewDestCluster | Measure-Object).Count -gt 1) {Throw "More than one destination cluster found matching name '$DestinationCluster'. Might check that name"}
+        ## get the view object of the destination resource pool
+        $viewDestResPool = Get-View -ViewType ResourcePool -Property Name -SearchRoot $viewDestCluster.MoRef -Filter @{"Name" = "^$strDestResPoolName$"}
 
-#     ## get the view object of the destination resource pool
-#     $viewDestResPool = Get-View -ViewType ResourcePool -Property Name -SearchRoot $viewDestCluster.MoRef -Filter @{"Name" = [RegEx]::escape($strDestResPoolName)}
+        ## array of .NET View objects of templates to move
+        $arrTemplViewsToMove = Get-View -ViewType VirtualMachine -Property Name -SearchRoot $viewSourceVMHost.MoRef -Filter @{"Config.Template" = "true"}
+        ## array of .NET View objects of VMHosts to which to move templates
+        $arrDestHostViews = Get-View -ViewType HostSystem -Property Name,Runtime.ConnectionState -SearchRoot $viewDestCluster.MoRef -Filter @{"Runtime.InMaintenanceMode" = "False"} | Where-Object {($_.Name -ne $strSourceVMHostName) -and ($_.RunTime.ConnectionState -eq "connected")}
 
-#     ## array of .NET View objects of templates to move
-#     $arrTemplViewsToMove = Get-View -ViewType VirtualMachine -Property Name -SearchRoot $viewSourceVMHost.MoRef -Filter @{"Config.Template" = "true"}
-#     ## array of .NET View objects of VMHosts to which to move templates
-#     $arrDestHostViews = Get-View -ViewType HostSystem -Property Name,Runtime.ConnectionState -SearchRoot $viewDestCluster.MoRef -Filter @{"Runtime.InMaintenanceMode" = "False"} | Where-Object {($_.Name -ne $strSourceVMHostName) -and ($_.RunTime.ConnectionState -eq "connected")}
+        ## move the templates to other hosts
+        $arrTemplViewsToMove | Foreach-Object {
+            $viewThisTemplate = $_
+            $strThisTemplateName = $viewThisTemplate.Name
+            $viewDestHostSystem = $arrDestHostViews | Get-Random
+            if ($PsCmdlet.ShouldProcess($strThisTemplateName, "Move template to HostSystem '$($viewDestHostSystem.Name)'")) {
+                try {
+                    Write-Verbose "Working on template '$strThisTemplateName' (Id '$($viewThisTemplate.MoRef.ToString())')"
+                    ## MigrateVM_Task() not supported on templates (does not work), so go this route:
+                    ## mark template as a VM, putting the template on a different host in the process (takes advantage of the Host param to change the Host on which the template resides in the process of marking it as a VM)
+                    #   http://pubs.vmware.com/vsphere-50/topic/com.vmware.wssdk.apiref.doc_50/vim.VirtualMachine.html?path=5_0_2_5_12_4#markAsVirtualMachine
+                    $_.MarkAsVirtualMachine($viewDestResPool.MoRef, $viewDestHostSystem.MoRef)
 
-#     ## move the templates to other hosts
-#     $arrTemplViewsToMove | Foreach-Object {
-#         $viewThisTemplate = $_
-#         $strThisTemplateName = $viewThisTemplate.Name
-#         $viewDestHostSystem = $arrDestHostViews | Get-Random
-#         if ($PsCmdlet.ShouldProcess($strThisTemplateName, "Move template to HostSystem '$($viewDestHostSystem.Name)'")) {
-#             try {
-#                 ## MigrateVM_Task() not supported on templates (does not work), so go this route:
-#                 ## mark template as a VM, putting the template on a different host in the process (takes advantage of the Host param to change the Host on which the template resides in the process of marking it as a VM)
-#                 #   http://pubs.vmware.com/vsphere-50/topic/com.vmware.wssdk.apiref.doc_50/vim.VirtualMachine.html?path=5_0_2_5_12_4#markAsVirtualMachine
-#                 $_.MarkAsVirtualMachine($viewDestResPool.MoRef, $viewDestHostSystem.MoRef)
-
-#                 ## mark VM as template again
-#                 #   http://pubs.vmware.com/vsphere-50/topic/com.vmware.wssdk.apiref.doc_50/vim.VirtualMachine.html?path=5_0_2_5_12_3#markAsTemplate
-#                 $_.MarkAsTemplate()
-#                 Get-Template -Id $_.MoRef
-#                 Write-Verbose "Moved template '$strThisTemplateName' (Id '$($viewThisTemplate.MoRef.ToString())') to VMHost '$($viewDestHostSystem.Name)'"
-#             } ## end try
-#             catch {Throw $_}
-#         } ## end if
-#     } ## end foreach-object
-# } ## end template
-
+                    ## mark VM as template again
+                    #   http://pubs.vmware.com/vsphere-50/topic/com.vmware.wssdk.apiref.doc_50/vim.VirtualMachine.html?path=5_0_2_5_12_3#markAsTemplate
+                    $_.MarkAsTemplate()
+                    Get-Template -Id $_.MoRef
+                    Write-Verbose "Moved template '$strThisTemplateName' (Id '$($viewThisTemplate.MoRef.ToString())') to VMHost '$($viewDestHostSystem.Name)'"
+                } ## end try
+                catch {Throw $_}
+            } ## end if
+        } ## end foreach-object
+    } ## end template
+} ## end fn
 # ## real 1337 way to move them back to their original host
 # <#
 # $arrTemplViewsToMove | %{
@@ -459,6 +460,7 @@ function Get-VNVMHostHBAWWN {
 
 
 
+# ## other functions:
 # ## function Get-VMHostNICFirmwareAndDriverInfo
 # <#  .Description
 #     Script to get NIC driver and firmware information for VMHosts.  Can specify name pattern for one or more VMHosts, or name pattern for a VMware cluster.  Jan 2013, Matt Boren
