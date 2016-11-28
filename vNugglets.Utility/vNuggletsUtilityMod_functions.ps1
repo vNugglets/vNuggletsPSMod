@@ -460,78 +460,74 @@ function Move-VNTemplateFromVMHost {
 
 
 
+function Get-VNVMHostNICFirmwareAndDriverInfo {
+<#  .Description
+    Function to get NIC driver and firmware information for VMHosts
+
+    .Example
+    Get-VMHost myhost0.dom.com | Get-VNVMHostNICFirmwareAndDriverInfo
+    VMHostName         NicDriverVersion       NicFirmwareVersion
+    ----------         ----------------       ------------------
+    myhost0.dom.com    nx_nic driver 5.0.619  nx_nic device firmware 4.0.588
+
+    Grab NIC driver- and firmware version(s) for NICs on given host
+
+    .Example
+    Get-Cluster myCluster0 | Get-VMHost | Get-VNVMHostNICFirmwareAndDriverInfo | sort VMHostName
+    VMHostName         NicDriverVersion        NicFirmwareVersion
+    ----------         ----------------        ------------------
+    myhost0.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
+    myhost1.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
+    myhost2.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
+    ...
+
+    Grab NIC driver- and firmware version(s) for NICs on hosts in given cluster
+#>
+    [CmdletBinding(DefaultParametersetName="ByVMHostName")]
+    param(
+        ## Name pattern(s) of VMHost(s) for which to get information
+        [parameter(ParameterSetName="ByVMHostName",Mandatory=$true,Position=0)][Alias("Name")][string[]]$VMHostName,
+        ## VMHost ID(s) for which to get information. Most useful when passing VMHost via pipeline
+        [parameter(ParameterSetName="ByVMHostId",Mandatory=$true,ValueFromPipelineByPropertyName=$true,Position=0)][Alias("Id", "MoRef")][string[]]$VMHostId
+    ) ## end param
+
+    begin {
+        ## the properties of the HostSystem(s) to retrieve
+        $arrHostSystemPropertiesToGet = Write-Output Name, Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo
+        ## the hashtable to use as the filter for the Get-View call
+        $hshHostSystemFilter = @{"Runtime.ConnectionState" = "connected|maintenance"; "Runtime.PowerState" = "poweredOn"}
+        ## Regular Expression against which to match the names of the numeric sensors to get the driver- and firmware sensors
+        $strNumericSensorInfoNamePattern = " driver | device firmware "
+    } ## end begin
+
+    process {
+        ## get the collection of host(s) for which to get NIC driver/firmware info, based on param passed
+        $arrHostViews = Switch ($PsCmdlet.ParameterSetName) {
+            "ByVMHostName" {
+                $hshHostSystemFilter["Name"] = $VMHostName -join "|"
+                Get-View -ViewType HostSystem -Property $arrHostSystemPropertiesToGet -Filter $hshHostSystemFilter
+                break
+            } ## end case
+            "ByVMHostId" {
+                Get-View -Id $VMHostId -Property $arrHostSystemPropertiesToGet
+            } ## end case
+        } ## end switch
+
+        ## return the NIC driver/firmware info
+        $arrHostViews | Foreach-Object {
+            ## get the NumericSensorInfo items that match the given pattern (not the strongest / most robust / most reliable way, maybe; revisit how to do better?)
+            $arrNicInfoItems = $_.Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo | Where-Object {$_.Name -match $strNumericSensorInfoNamePattern} | Select-Object -Unique Name
+            New-Object -Type PSObject -Property @{
+                VMHostName = $_.Name
+                NicDriverVersion = $arrNicInfoItems | Where-Object {$_.Name -like "*driver*"} | Foreach-Object {$_.Name} | Sort-Object
+                NicFirmwareVersion = $arrNicInfoItems | Where-Object {$_.Name -like "*device firmware*"} | Foreach-Object {$_.Name} | Sort-Object
+            } ## end new-object
+        } ## end foreach-object
+    } ## end process
+} ## end fn
+
+
 # ## other functions:
-# ## function Get-VMHostNICFirmwareAndDriverInfo
-# <#  .Description
-#     Script to get NIC driver and firmware information for VMHosts.  Can specify name pattern for one or more VMHosts, or name pattern for a VMware cluster.  Jan 2013, Matt Boren
-#     .Example
-#     Get-VMHostNICFirmwareAndDriverInfo -VMHostName myhost0.dom.com
-
-#     VMHostName         NicDriverVersion       NicFirmwareVersion
-#     ----------         ----------------       ------------------
-#     myhost0.dom.com    nx_nic driver 5.0.619  nx_nic device firmware 4.0.588
-
-#     Grab NIC driver- and firmware version(s) for NICs on given host
-
-#     .Example
-#     Get-VMHostNICFirmwareAndDriverInfo -ClusterName myCluster0 | sort VMHostName
-
-#     VMHostName         NicDriverVersion        NicFirmwareVersion
-#     ----------         ----------------        ------------------
-#     myhost0.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
-#     myhost1.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
-#     myhost2.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
-#     ...
-
-#     Grab NIC driver- and firmware version(s) for NICs on hosts in given cluster
-# #>
-
-# [CmdletBinding(DefaultParametersetName="SpecificHosts")]
-# param(
-#     ## name pattern of VMHost for which to get information
-#     [parameter(ParameterSetName="SpecificHosts",Mandatory=$true,Position=0)][string]$VMHostName_str,
-#     ## name pattern of cluster of VMHosts; will get information for each VMHost
-#     [parameter(ParameterSetName="ByCluster",Mandatory=$true,Position=0)][string]$ClusterName_str
-# ) ## end param
-
-# ## the properties of the HostSystem(s) to retrieve
-# $arrHostSystemPropertiesToGet = "Name,Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo".Split(",")
-# ## the hashtable to use as the filter for the Get-View call
-# $hshHostSystemFilter = @{"Runtime.ConnectionState" = "connected|maintenance"; "Runtime.PowerState" = "poweredOn"}
-# ## Regular Expression against which to match the names of the numeric sensors to get the driver- and firmware sensors
-# $strNumericSensorInfoNamePattern = " driver | device firmware "
-
-
-# ## get the collection of host(s) for which to get NIC driver/firmware info, based on param passed
-# Switch ($PsCmdlet.ParameterSetName) {
-#     "SpecificHosts" {
-#         $hshHostSystemFilter["Name"] = $VMHostName_str
-#         $arrHostViews = Get-View -ViewType HostSystem -Property $arrHostSystemPropertiesToGet -Filter $hshHostSystemFilter
-#     } ## end case
-#     "ByCluster" {
-#         $strClusterName = $ClusterName_str
-#         $viewCluster = Get-View -ViewType ClusterComputeResource -Property Name -Filter @{"Name" = $strClusterName}
-#         Switch (($viewCluster | Measure-Object).Count) {
-#             {$_ -eq 0} {"No matching clusters found -- check the cluster name pattern '$strClusterName'. Exiting."; exit}
-#             {$_ -gt 1} {Write-Warning "Hm -- the cluster name pattern '$strClusterName' did not return just one (1) cluster in which to search (returned '$(($viewCluster | Measure-Object).Count)' clusters) -- you might need to stop this run and verify that the cluster name pattern used is returning the expected cluster"}
-#         } ## end switch
-#         ## get powered-on, connected hosts in the given cluster for querying the available disks
-#         $arrHostViews = $viewCluster | %{Get-View -ViewType HostSystem -Property $arrHostSystemPropertiesToGet -SearchRoot $_.MoRef -Filter $hshHostSystemFilter}
-#     } ## end case
-# } ## end switch
-
-# ## return the NIC driver/firmware info
-# $arrHostViews | %{
-#     $arrNicInfoItems = $_.Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo | ?{$_.Name -match $strNumericSensorInfoNamePattern} | select -unique name
-#     New-Object -Type PSObject -Property @{
-#         VMHostName = $_.Name
-#         NicDriverVersion = $arrNicInfoItems | ?{$_.Name -like "*driver*"} | %{$_.Name} | sort
-#         NicFirmwareVersion = $arrNicInfoItems | ?{$_.Name -like "*device firmware*"} | %{$_.Name} | sort
-#     } ## end new-object
-# } ## end foreach-object
-
-
-
 # ## Get-VMHostFirmwareInfo
 # <#  .Description
 #     quick script to get BIOS date, Smart Array FW version, and iLO FW version for HP hosts in a given location (folder, cluster, datacenter, etc.); Sep 2011 -- Matt Boren
@@ -610,7 +606,7 @@ function Move-VNTemplateFromVMHost {
 # [CmdletBinding(DefaultParameterSetName="ByVMHostName")]
 # param(
 #     ## name of VMHost to check; if none, queries all hosts
-#     [parameter(ParameterSetName="ByVMHostName")][string]$VMHostName_str,
+#     [parameter(ParameterSetName="ByVMHostName")][string]$VMHostName,
 #     ## Managed Object(s) of host(s) to check
 #     [parameter(ParameterSetName="ByHostSystem")][VMware.Vim.HostSystem[]]$HostSystem_mo
 # ) ## end param
@@ -623,7 +619,7 @@ function Move-VNTemplateFromVMHost {
 #         ## make the Get-View expression to invoke
 #         $strGetViewExpr = 'Get-View -ViewType HostSystem -Property Name,$strMOPropertyForStorageStatusInfo'
 #         ## if there is a host name filter, add it
-#         if ($VMHostName_str) {$strGetViewExpr += " -Filter @{'Name' = '$VMHostName_str'}"}
+#         if ($VMHostName) {$strGetViewExpr += " -Filter @{'Name' = '$VMHostName'}"}
 #         ## get the HostSystem(s) of interest
 #         $arrHostSystemViews = Invoke-Expression $strGetViewExpr
 #         break;} ## end case
