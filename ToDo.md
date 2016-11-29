@@ -7,6 +7,8 @@
 - update function `Get-VNVMByAddress` to:
   - use `VMware.Vim.SearchIndex` for speed for FindAllByIp (does support wildcard, though)
   - support searching by guest DNS name (also using `VMware.Vim.SearchIndex`, via the `FindAllByDnsName` method)
+- update function `Get-VNVMByVirtualPortGroup` to:
+  - add support for taking a standard- or distributed virtual portgroup as a parameter (and, from pipeline)
 
 
 

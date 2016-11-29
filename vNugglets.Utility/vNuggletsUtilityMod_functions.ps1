@@ -180,6 +180,7 @@ function Get-VNVMByAddress {
     Use -AddressWildcard to find VMs with approximate IP
 
     .Link
+    Get-VNVMByVirtualPortGroup
     http://vNugglets.com
 
     .Notes
@@ -215,6 +216,84 @@ function Get-VNVMByAddress {
                 Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object Name, @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, MoRef
             } ## end case
         } ## end switch
+    } ## end process
+} ## end fn
+
+
+
+function Get-VNVMByVirtualPortGroup {
+<#  .Description
+    Function to get information about which VMs are on a given virtual network (a.k.a. "virtual portgroup")
+
+    .Example
+    Get-VNVMByVirtualPortGroup -NetworkName VLAN19 | ft VMName,Network,VMHost,Cluster
+    VMName          Network         VMHost            Cluster
+    ------          -----------     ------            -------
+    vm0.dom.com     VLAN19.Sekurr   vmhost0.dom.com   myCluster0
+    vm10.dom.com    VLAN19.Sekurr   vmhost3.dom.com   myCluster0
+    vm32.dom.com    VLAN19.Sekurr   vmhost2.dom.com   myCluster0
+    ...
+
+    Get networks matching "VLAN19", and get their VMs' names and some other VM information
+
+    .Example
+    Get-VNVMByVirtualPortGroup -NetworkLiteralName VLAN3 | ft -a
+    VMName   Network  VMHost            Cluster     PowerState   MoRef
+    ------   -------  ------            -------     ----------   -----
+    myVM0    VLAN3    myVMHost.dom.com  myCluster2  poweredOn    VirtualMachine-vm-142
+    ...
+
+    Get network named exactly "VLAN3", and get its VMs' names and some other VM information
+
+    .Link
+    Get-VNVMByAddress
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding(DefaultParameterSetName="NameAsRegEx")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+
+    param(
+        ## Name of the virtual network (virtual portgroup) to get.  This is a Regular Expression pattern
+        [parameter(Mandatory=$true,ParameterSetName="NameAsRegEx",Position=0)][string[]]$NetworkName,
+
+        ## Literal name of virtual network for which to get information.  This RegEx-escapes the string and adds start/end anchors ("^" and "$") so that the only match is an exact match
+        [parameter(Mandatory=$true,ParameterSetName="NameAsLiteral",Position=0)][String[]]$NetworkLiteralName
+    ) ## end param
+
+    process {
+        ## make the params for generating the new RegEx pattern
+        $hshParamForNewRegExPattern = Switch ($PsCmdlet.ParameterSetName) {
+            "NameAsRegEx" {@{String = $NetworkName; EscapeAsLiteral = $false}; break}
+            ## if literal, do escape as literal
+            "NameAsLiteral" {@{String = $NetworkLiteralName; EscapeAsLiteral = $true}}
+        } ## end switch
+
+        ## make the actual RegEx pattern, joining all values, and escaping if strings are to be literal
+        $strNetworkNameFilter = _New-RegExJoinedOrPattern @hshParamForNewRegExPattern
+
+        $arrNetworkViews = Get-View -ViewType Network -Property Name -Filter @{Name = $strNetworkNameFilter}
+        if (($arrNetworkViews | Measure-Object).Count -eq 0) {Write-Warning "No networks found matching name '$($hshParamForNewRegExPattern['String'])'"}
+        else {
+            ## get the networks' VMs' info
+            $arrNetworkViews | Foreach-Object {$_.UpdateViewData("Vm.Name","Vm.Runtime.Host.Name","Vm.Runtime.Host.Parent.Name","Vm.Runtime.PowerState")}
+            ## for each item, return a new info object
+            $arrNetworkViews | Foreach-Object {
+                $viewNetwk = $_
+                $viewNetwk.LinkedView.Vm | Foreach-Object {
+                    New-Object -TypeName PSObject -Property ([ordered]@{
+                        VMName = $_.Name
+                        Network = $viewNetwk.Name
+                        VMHost = $_.Runtime.LinkedView.Host.Name
+                        Cluster = $_.Runtime.LinkedView.Host.LinkedView.Parent.Name
+                        PowerState = $_.Runtime.PowerState
+                        MoRef = $_.MoRef
+                    }) ## end new-object
+                } ## end foreach-object
+            } ## end foreach-object
+        } ## end else
     } ## end process
 } ## end fn
 
@@ -562,6 +641,7 @@ function Get-VNVMHostFirmwareInfo {
     System.Management.Automation.PSCustomObject
 #>
     [CmdletBinding(DefaultParametersetName="ByVMHostName")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
     param(
         ## Name pattern(s) of VMHost(s) for which to get information
         [parameter(ParameterSetName="ByVMHostName",Position=0)][Alias("Name")][string[]]$VMHostName = ".+",
@@ -710,47 +790,78 @@ function Disconnect-VNVIServer {
 
 
 
+function Get-VNVMHostLogicalVolumeInfo {
+<#  .Description
+    Get logical volume information for VMHost from StorageStatusInfo of their managed objects. Depends on CIM provider being installed and in good health, presumably.
+
+    .Example
+    Get-Cluster myCluster0 | Get-VMHost | Get-VNVMHostLogicalVolumeInfo
+    VMHostName          LogicalVolume
+    ----------          -------------
+    myhost20.dom.com    Logical Volume 1 on HPSA1 : RAID 1 : 136GB : Disk 1,2
+    myhost21.dom.com    Logical Volume 1 on HPSA1 : RAID 1 : 136GB : Disk 1,2
+    myhost22.dom.com    Logical Volume 1 on HPSA1 : RAID 1 : 279GB : Disk 1,2,3
+
+    .Example
+    Get-VNVMHostLogicalVolumeInfo -VMHostName myhost0,myhost1,myhost22
+    VMHostName          LogicalVolume
+    ----------          -------------
+    myhost0.dom.com     Logical Volume 1 on HPSA1 : RAID 5 : 273GB : Disk 1,3,4
+    myhost1.dom.com     Logical Volume 1 on HPSA1 : RAID 1 : 136GB : Disk 1,2
+    myhost22.dom.com    Logical Volume 1 on HPSA1 : RAID 1 : 279GB : Disk 1,2,3
+
+    .Link
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding(DefaultParameterSetName="ByVMHostName")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    param (
+        ## Name pattern(s) of VMHost(s) for which to get information
+        [parameter(ParameterSetName="ByVMHostName",Position=0)][Alias("Name")][string[]]$VMHostName = ".+",
+
+        ## VMHost ID(s) for which to get information. Most useful when passing VMHost via pipeline
+        [parameter(ParameterSetName="ByVMHostId",Mandatory=$true,ValueFromPipelineByPropertyName=$true,Position=0)][Alias("Id", "MoRef")][string[]]$VMHostId
+    ) ## end param
+
+    begin {
+        ## the properties of the HostSystem(s) to retrieve
+        $arrHostSystemPropertiesToGet = Write-Output Name, Runtime.HealthSystemRuntime.HardwareStatusInfo.StorageStatusInfo
+        $hshParamForGetView = @{Property = $arrHostSystemPropertiesToGet}
+    } ## end begin
+
+    process {
+        Switch ($PsCmdlet.ParameterSetName) {
+            "ByVMHostName" {
+                $hshParamForGetView["ViewType"] = "HostSystem"
+                ## if there is a host name filter, add it
+                if ($PSBoundParameters.ContainsKey("VMHostName")) {$hshParamForGetView["Filter"] = @{Name = $(_New-RegExJoinedOrPattern -String $VMHostName)}}
+                break
+            } ## end case
+            "ByVMHostId" {
+                $hshParamForGetView["Id"] = $VMHostId
+            } ## end case
+        } ## end switch
+
+        ## get the HostSystem(s) of interest and foreach, create a new info object with info about the logical volumes on the VMHost(s)
+        Get-View @hshParamForGetView | Foreach-Object {
+            New-Object -Type PSObject -Property ([ordered]@{
+              VMHostName = $_.Name
+              LogicalVolume = $_.Runtime.HealthSystemRuntime.HardwareStatusInfo.StorageStatusInfo | Where-Object {$_.Name -like "Logical*"} | Foreach-Object {$_.Name}
+            }) ## end new-object
+        } ## end foreach-object
+    } ## end process
+} ## end fn
+
+
+
+
+
 
 
 # ## other functions:
-# ## Get-VMHostLogicalVolumeInfo
-# <#  .Description
-#     Get logical volume info for VMHost from StorageStatusInfo of their managed objects. Depends on CIM provider being installed and in good health, presumably.  Aug 2012, MBoren
-#     Updated Mar 2013 to also take HostSystem .NET View object(s) as param, instead of just host name
-# #>
-# [CmdletBinding(DefaultParameterSetName="ByVMHostName")]
-# param(
-#     ## name of VMHost to check; if none, queries all hosts
-#     [parameter(ParameterSetName="ByVMHostName")][string]$VMHostName,
-#     ## Managed Object(s) of host(s) to check
-#     [parameter(ParameterSetName="ByHostSystem")][VMware.Vim.HostSystem[]]$HostSystem_mo
-# ) ## end param
-
-# ## name of the HostSystem property from which to get logical volume info
-# $strMOPropertyForStorageStatusInfo = 'Runtime.HealthSystemRuntime.HardwareStatusInfo.StorageStatusInfo'
-
-# Switch ($PsCmdlet.ParameterSetName) {
-#     "ByVMHostName" {
-#         ## make the Get-View expression to invoke
-#         $strGetViewExpr = 'Get-View -ViewType HostSystem -Property Name,$strMOPropertyForStorageStatusInfo'
-#         ## if there is a host name filter, add it
-#         if ($VMHostName) {$strGetViewExpr += " -Filter @{'Name' = '$VMHostName'}"}
-#         ## get the HostSystem(s) of interest
-#         $arrHostSystemViews = Invoke-Expression $strGetViewExpr
-#         break;} ## end case
-#     "ByHostSystem" {
-#         ## make sure the the .NET View objects have desired property populated
-#         $HostSystem_mo | %{$_.UpdateViewData("Name",$strMOPropertyForStorageStatusInfo)}
-#         $arrHostSystemViews = $HostSystem_mo
-#         break;} ## end case
-# } ## end switch
-
-# ## select the given items that deal with logical volumes on the host(s)
-# $arrHostSystemViews | Select name,@{n="logicalVol"; e={($_.Runtime.HealthSystemRuntime.HardwareStatusInfo.StorageStatusInfo | ?{$_.Name -like "Logical*"} | %{$_.Name}) -join ", "}}
-
-
-
-
 # ## Evacuate-Datastore
 # <#  .Description
 #     Script to evacuate virtual disks and/or VM config files from a given datastore; does not move the entire VM and all its disks if they reside elsewhere. Created 06-Nov-2012 by vNugglets.com.
@@ -962,55 +1073,6 @@ function Disconnect-VNVIServer {
 #     } ## end else
 # } ## end process
 
-
-
-
-# ## Get-VMOnNetworkPortGroup
-# <#  .Description
-#     Script to get names of VMs on a given virtual network (a.k.a. "virtual portgroup"), and the VMs' VMhost names.  Matt Boren, Nov 2012
-#     Updated Nov 2013:  added piece to return VMHosts' cluster name, too
-#     Updated Apr 2015:  added PowerState and MoRef properties
-#     .Example
-#     Get-VMOnNetworkPortGroup -net VLAN19
-
-#     VMName           NetworkName      VMHost
-#     ------           -----------      ------
-#     vm0.dom.com      VLAN19.Sekurr    vmhost0.dom.com
-#     vm10.dom.com     VLAN19.Sekurr    vmhost3.dom.com
-#     vm32.dom.com     VLAN19.Sekurr    vmhost2.dom.com
-#     ...
-
-#     Get networks matching "VLAN19", and get their VMs' names and the VMs' host
-#     .Outputs
-#     PSObject
-# #>
-
-# param(
-#     ## name of network to get; regex pattern
-#     [parameter(Mandatory=$true)][string[]]$NetworkName
-# ) ## end param
-
-# process {
-#     $arrNetworkViews = Get-View -ViewType Network -Property Name -Filter @{"Name" = $($NetworkName -join "|")}
-#     if (($arrNetworkViews | Measure-Object).Count -eq 0) {Write-Warning "No networks found matching name '$NetworkName'"}
-#     else {
-#         ## get the networks' VMs' info
-#         $arrNetworkViews | Foreach-Object {$_.UpdateViewData("Vm.Name","Vm.Runtime.Host.Name","Vm.Runtime.Host.Parent.Name","Vm.Runtime.PowerState")}
-#         $arrNetworkViews | Foreach-Object {
-#             $viewNetwk = $_
-#             $viewNetwk.LinkedView.Vm | Foreach-Object {
-#                 New-Object -TypeName PSObject -Property ([ordered]@{
-#                     Name = $_.Name
-#                     Network = $viewNetwk.Name
-#                     VMHost = $_.Runtime.LinkedView.Host.Name
-#                     Cluster = $_.Runtime.LinkedView.Host.LinkedView.Parent.Name
-#                     PowerState = $_.Runtime.PowerState
-#                     MoRef = $_.MoRef
-#                 })
-#             } ## end foreach-object
-#         } ## end foreach-object
-#     } ## end else
-# } ## end process
 
 
 
