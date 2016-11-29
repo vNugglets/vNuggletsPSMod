@@ -329,8 +329,10 @@ function Get-VNVMHostHBAWWN {
     Param(
         ## Name pattern of the host for which to get HBA info (treated as a RegEx pattern)
         [parameter(Mandatory=$true,ParameterSetName="SearchByHostName")][string]$VMHostName,
+
         ## The ID (MoRef) the host for which to get HBA info
         [parameter(Mandatory=$true,ParameterSetName="SearchByHostId",ValueFromPipelineByPropertyName=$true)][Alias("Id")][string]$VMHostId,
+
         ## The cluster for whose hosts to get HBA info
         [parameter(Mandatory=$true,ParameterSetName="SearchByCluster",ValueFromPipeline=$true)][VMware.VimAutomation.ViCore.Types.V1.Inventory.Cluster]$Cluster
     ) ## end param
@@ -389,6 +391,7 @@ function Move-VNTemplateFromVMHost {
     param(
         ## VMHost from which to evacuate templates
         [parameter(ValueFromPipeline=$true, Mandatory=$true)][VMware.VimAutomation.Types.VMHost]$VMHost,
+
         ## VMHost cluster to which to move templates; if not specified, templates will be moved to other available VMHosts in the same cluster as the source VMHost
         [VMware.VimAutomation.Types.Cluster]$DestinationCluster
     ) ## end param
@@ -482,11 +485,19 @@ function Get-VNVMHostNICFirmwareAndDriverInfo {
     ...
 
     Grab NIC driver- and firmware version(s) for NICs on hosts in given cluster
+
+    .Link
+    Get-VNVMHostFirmwareInfo
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
 #>
     [CmdletBinding(DefaultParametersetName="ByVMHostName")]
     param(
         ## Name pattern(s) of VMHost(s) for which to get information
         [parameter(ParameterSetName="ByVMHostName",Mandatory=$true,Position=0)][Alias("Name")][string[]]$VMHostName,
+
         ## VMHost ID(s) for which to get information. Most useful when passing VMHost via pipeline
         [parameter(ParameterSetName="ByVMHostId",Mandatory=$true,ValueFromPipelineByPropertyName=$true,Position=0)][Alias("Id", "MoRef")][string[]]$VMHostId
     ) ## end param
@@ -517,87 +528,191 @@ function Get-VNVMHostNICFirmwareAndDriverInfo {
         $arrHostViews | Foreach-Object {
             ## get the NumericSensorInfo items that match the given pattern (not the strongest / most robust / most reliable way, maybe; revisit how to do better?)
             $arrNicInfoItems = $_.Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo | Where-Object {$_.Name -match $strNumericSensorInfoNamePattern} | Select-Object -Unique Name
-            New-Object -Type PSObject -Property @{
+            New-Object -Type PSObject -Property ([ordered]@{
                 VMHostName = $_.Name
                 NicDriverVersion = $arrNicInfoItems | Where-Object {$_.Name -like "*driver*"} | Foreach-Object {$_.Name} | Sort-Object
                 NicFirmwareVersion = $arrNicInfoItems | Where-Object {$_.Name -like "*device firmware*"} | Foreach-Object {$_.Name} | Sort-Object
-            } ## end new-object
+            }) ## end new-object
         } ## end foreach-object
     } ## end process
 } ## end fn
 
 
+function Get-VNVMHostFirmwareInfo {
+<#  .Description
+    Function to get System BIOS date, HP Smart Array firmware version, and HP iLO firmware version for HP VMHosts
+
+    .Example
+    Get-VNVMHostFirmwareInfo
+    Get all VMHosts' firmware info
+
+    .Example
+    Get-Cluster MyCluster | Get-VMHost | Get-VNVMHostFirmwareInfo
+    Get firmware info for VMHosts in the cluster "MyCluster"
+
+    .Example
+    Get-VNVMHostFirmwareInfo | sort HPSmartArray,VMHost | ft -a VMHostName,SystemBIOS,HPSmartArray
+    Get all hosts' firmware info, and return table of just the given properties, sorted on HPSmartArray version then VMHost name
+
+    .Link
+    Get-VNVMHostNICFirmwareAndDriverInfo
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding(DefaultParametersetName="ByVMHostName")]
+    param(
+        ## Name pattern(s) of VMHost(s) for which to get information
+        [parameter(ParameterSetName="ByVMHostName",Position=0)][Alias("Name")][string[]]$VMHostName = ".+",
+
+        ## VMHost ID(s) for which to get information. Most useful when passing VMHost via pipeline
+        [parameter(ParameterSetName="ByVMHostId",Mandatory=$true,ValueFromPipelineByPropertyName=$true,Position=0)][Alias("Id", "MoRef")][string[]]$VMHostId
+    ) ## end param
+
+    begin {
+        ## the properties of the HostSystem(s) to retrieve
+        $arrHostSystemPropertiesToGet = Write-Output Name, Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo, Hardware.SystemInfo.Model
+    } ## end begin
+
+    process {
+        ## get the collection of host(s) for which to get NIC driver/firmware info, based on param passed
+        $arrHostViews = Switch ($PsCmdlet.ParameterSetName) {
+            "ByVMHostName" {
+                $hshHostSystemFilter = @{Name = $VMHostName -join "|"}
+                Get-View -ViewType HostSystem -Property $arrHostSystemPropertiesToGet -Filter $hshHostSystemFilter
+                break
+            } ## end case
+            "ByVMHostId" {
+                Get-View -Id $VMHostId -Property $arrHostSystemPropertiesToGet
+            } ## end case
+        } ## end switch
+
+        $arrHostViews | Foreach-Object {
+            $viewHostSystem = $_
+            $arrNumericSensorInfo = @($viewHostSystem.Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo)
+            ## HostNumericSensorInfo for BIOS, iLO, array controller
+            $nsiBIOS = $arrNumericSensorInfo | Where-Object {$_.Name -like "*System BIOS*"}
+            $nsiArrayCtrlr = $arrNumericSensorInfo | Where-Object {$_.Name -like "HP Smart Array Controller*"}
+            $nsiILO = $arrNumericSensorInfo | Where-Object {$_.Name -like "Hewlett-Packard BMC Firmware*"}
+            New-Object PSObject -Property ([ordered]@{
+                VMHostName = $viewHostSystem.Name
+                SystemBIOS = $nsiBIOS.name
+                HPSmartArray = $nsiArrayCtrlr.Name
+                iLOFirmware = $nsiILO.Name
+                Model = $viewHostSystem.Hardware.SystemInfo.Model
+            }) ## end new-object
+        } ## end Foreach-Object
+    } ## end process
+} ## end fn
+
+
+
+
+function Update-VNTitleBarForPowerCLI {
+<#  .Description
+    Function to update the PowerShell window's title bar with the VIServers to which the current session is connected.  Called automatically by functions Connect-VNVIServer and Disconnect-VNVIServer.
+
+    .Example
+    Update-VNTitleBarForPowerCLI
+    Updates PowerShell window's title bar
+
+    .Link
+    Connect-VNVIServer
+    Disconnect-VNVIServer
+    http://vNugglets.com
+
+    .Outputs
+    Null
+#>
+    process {
+        $host.ui.RawUI.WindowTitle = "[PowerCLI] {0}" -f $(
+            if ($global:DefaultVIServers.Count -gt 0) {
+                if ($global:DefaultVIServers.Count -eq 1) {"Connected to {0} as {1}" -f $global:DefaultVIServers[0].Name, $global:DefaultVIServers[0].User}
+                else {"Connected to {0} servers:  {1}." -f $global:DefaultVIServers.Count, (($global:DefaultVIServers | Foreach-Object {$_.Name}) -Join ", ")}
+            } ## end if
+            else {"Not Connected"}
+        ) ## end -f call
+    } ## end process
+} ## end fn
+
+
+
+function Connect-VNVIServer {
+<#  .Description
+    Function to use for connecting to VIServers instead of the default "Connect-VIServer" cmdlet -- includes call to function to update PowerShell window's title bar with the VIServer(s) to which the current session has connections
+
+    .Example
+    Connect-VNVIServer -Credential $myCred -VIServer myVC0.dom.com, myVC1.dom.com
+    Connects to the given vCenters using the given credentials, and updates the PowerShell window's title bar accordingly
+
+    .Link
+    Disconnect-VNVIServer
+    Update-VNTitleBarForPowerCLI
+    http://vNugglets.com
+
+    .Outputs
+    VMware.VimAutomation.Types.VIServer
+#>
+    param(
+        ## Name of VI server to which to connect
+        [parameter(Mandatory=$true, Position=0)][string[]]$VIServer,
+
+        ## Credential to use for connection
+        [parameter(Position=1)][ValidateNotNullOrEmpty()][System.Management.Automation.PSCredential]$Credential
+    ) ## end param
+
+    process {
+        ## check that given target VIServers are responsive to ping requests (assumes that ICMP echo traffic is allowed from the target machine)
+        $arrVIServersToWhichToConnect = $VIServer | Foreach-Object {
+            $strVIServerToWhichToConnect = $_
+            if (-not (Test-Connection -Quiet -Count 2 $strVIServerToWhichToConnect)) {Write-Warning "server at '$strVIServerToWhichToConnect' not reachable; not trying to connect"}
+            else {$strVIServerToWhichToConnect}
+        } ## end foreach
+        $hshConnectVIServerParams = @{Server = $arrVIServersToWhichToConnect}
+        if ($PSBoundParameters.ContainsKey("Credential")) {$hshConnectVIServerParams["Credential"] = $Credential}
+        ## connect to the given server(s)
+        Connect-VIServer @hshConnectVIServerParams
+        ## update the PowerShell WindowTitle
+        Update-VNTitleBarForPowerCLI
+    } ## end process
+} ## end fn
+
+
+
+function Disconnect-VNVIServer {
+<#  .Description
+    Function to use for disconnecting from VIServers, to be used instead of the "Disconnect-VIServer" cmdlet, as it includes a call to a function that updates the PowerShell window's title bar with the VIServer(s) to which the current session still has connections (if any)
+
+    .Example
+    Disconnect-VNVIServer
+    Disconnects from all VIServers to which current PowerCLI session had connections
+
+    .Link
+    Connect-VNVIServer
+    Update-VNTitleBarForPowerCLI
+    http://vNugglets.com
+
+    .Outputs
+    Null
+#>
+    param (
+        ## Name(s) of the VIServers from which to disconnect.  Accepts wildcards.  Disconnects from all VIServer if none specified here.
+        [string[]]$VIServer = "*"
+    ) ## end param
+
+    process {
+        Disconnect-VIServer -Server $VIServer -Confirm:$false
+        ## update the PowerShell WindowTitle
+        Update-VNTitleBarForPowerCLI
+    } ## end process
+} ## end fn
+
+
+
+
+
 # ## other functions:
-# ## Get-VMHostFirmwareInfo
-# <#  .Description
-#     quick script to get BIOS date, Smart Array FW version, and iLO FW version for HP hosts in a given location (folder, cluster, datacenter, etc.); Sep 2011 -- Matt Boren
-#     -updated 22-Sep-2011 by Allen Crawford -- added parameters
-#     -updated 26 Oct 2011 by Matt Boren -- added comment based help, added "default" value for $strViewType, if neither param is supplied
-#     .Example
-#     Get-VMHostFirmwareInfo
-#     Get all hosts' firmware info
-#     .Example
-#     Get-VMHostFirmwareInfo -clusterName MyCluster
-
-#     Get firmware info for hosts in the cluster "MyCluster"
-#     .Example
-#     Get-VMHostFirmwareInfo | sort HPSmartArray,VMHost | ft -a VMHost,SystemBIOS,HPSmartArray
-#     Get all hosts' firmware info, and return table of just the given properties, sorted on HPSmartArray version then VMHost name
-# #>
-
-# ## params for cluster- or folder-based queries
-# param(
-#     ## the name of the cluster to query
-#     [string]$clusterName_str,
-#     ## the name of the folder to query
-#     [string]$folderName_str
-# ) ## end parameter
-
-# if ($clusterName_str) {
-#     $strViewType = "ClusterComputeResource"
-#     $strEntityName = $clusterName_str
-# } ## end if
-# elseif ($folderName_str) {
-#     $strViewType = "Folder"
-#     $strEntityName = $folderName_str
-# } ## end elseif
-# ## else, just get info for all hosts (not setting value for $strEntityName)
-# else {$strViewType = "DataCenter"}
-
-# Get-View -ViewType HostSystem -Property Name, Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo -SearchRoot (Get-View -ViewType $strViewType -Property Name -Filter @{"Name" = $strEntityName}).MoRef | %{
-#     $viewHostSystem = $_
-#     $arrNumericSensorInfo = @($viewHostSystem.Runtime.HealthSystemRuntime.SystemHealthInfo.NumericSensorInfo)
-#     ## HostNumericSensorInfo for BIOS, iLO, array controller
-#     $nsiBIOS = $arrNumericSensorInfo | ?{$_.Name -like "*System BIOS*"}
-#     $nsiArrayCtrlr = $arrNumericSensorInfo | ?{$_.Name -like "HP Smart Array Controller*"}
-#     $nsiILO = $arrNumericSensorInfo | ?{$_.Name -like "Hewlett-Packard BMC Firmware*"}
-#     New-Object PSObject -Property @{
-#         VMHost = $viewHostSystem.Name
-#         SystemBIOS = $nsiBIOS.name
-#         HPSmartArray = $nsiArrayCtrlr.Name
-#         iLOFirmware = $nsiILO.Name
-#     } ## end new-object
-# } ## end Foreach-Object
-
-
-
-
-
-# function Update-TitleBarForPowerCLI {
-#     $strWindowTitle = "[PowerCLI] {0}" -f $(
-#         if ($global:DefaultVIServers.Count -gt 0) {
-#             if ($global:DefaultVIServers.Count -eq 1) {"Connected to {0} as {1}" -f $global:DefaultVIServers[0].Name, $global:DefaultVIServers[0].User}
-#             else {"Connected to {0} servers:  {1}." -f $global:DefaultVIServers.Count, (($global:DefaultVIServers | Foreach-Object {$_.Name}) -Join ", ")}
-#         } ## end if
-#         else {"Not Connected"}
-#     ) ## end -f call
-#     $host.ui.RawUI.WindowTitle = $strWindowTitle
-# } ## end fn
-
-
-
-
-
 # ## Get-VMHostLogicalVolumeInfo
 # <#  .Description
 #     Get logical volume info for VMHost from StorageStatusInfo of their managed objects. Depends on CIM provider being installed and in good health, presumably.  Aug 2012, MBoren
