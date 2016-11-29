@@ -15,7 +15,7 @@ $arrAliasNamesToExport = $hshNewAliasInfo.GetEnumerator() | Foreach-Object {
 
 ## export these items for use by consumer
 $hshModuleMemberParams = @{
-	Function = Write-Output Connect-VNVIServer, Disconnect-VNVIServer,
+	Function = Write-Output Connect-VNVIServer, Copy-VNVIRole, Disconnect-VNVIServer,
 		Get-VNNetworkClusterInfo, Get-VNVMByAddress, Get-VNVMByVirtualPortGroup, Get-VNVMEVCInfo, Get-VNVMHostBrokenUplink, Get-VNVMHostFirmwareInfo,
 		Get-VNVMHostHBAWWN, Get-VNVMHostLogicalVolumeInfo, Get-VNVMHostNICFirmwareAndDriverInfo, Move-VNTemplateFromVMHost, Update-VNTitleBarForPowerCLI
 	Alias = $arrAliasNamesToExport
