@@ -9,7 +9,7 @@
   - support searching by guest DNS name (also using `VMware.Vim.SearchIndex`, via the `FindAllByDnsName` method)
 - update function `Get-VNVMByVirtualPortGroup` to take a standard- or distributed virtual portgroup as a parameter (and, from pipeline)
 - update function `Copy-VNVIRole` to take SourceVIRole as VIRole object, and to accept it from pipeline
-
+- update function `Get-VNUplinkNicForVM` to give more meaninful VDSwitch identification (currently returns something to the effect of `DvsPortset-1` for the vSwitch name)
 
 
 

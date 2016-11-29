@@ -912,6 +912,71 @@ function Copy-VNVIRole {
 
 
 
+function Get-VNUplinkNicForVM {
+<#  .Description
+    Script to retrieve Netports' (virtual portgroup ports) client, uplink information, vSwitch, and more information.  This is useful for knowing which actual VMHost physcial uplink a VM is currently using.  Also includes things like VMKernel ports and Mangement uplinks.
+
+    .Example
+    Get-VNUplinkNicForVM -VMHost myhost0.dom.com -Credential (Get-Credential root)
+    ClientName           TeamUplink          vSwitch           VMHost
+    ----------           ----------          -------           ---------------
+    Management           n/a                 vSwitch0          myhost0.dom.com
+    vmk1                 vmnic0              vSwitch0          myhost0.dom.com
+    vmk0                 vmnic0              vSwitch0          myhost0.dom.com
+    myvm001              vmnic0              vSwitch0          myhost0.dom.com
+    myvm002              vmnic3              vSwitch1          myhost0.dom.com
+    myvm003              vmnic5              vSwitch2          myhost0.dom.com
+    myvm050.eth0         vmnic4              DvsPortset-0      myhost0.dom.com
+    ...
+
+    Get the Netports on given VMHost, and return their client name, uplink vmnic, vSwitch, etc.  Currently the vSwitch name for virtual distributed switches is just a generic "DvsPortset-0" type of name. The ToDo for this function includes making this property have more robust values for VDSwitches
+
+    .Link
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding()]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    param(
+        ## The DNS name of the VMHost whose VMs' uplink information to get (not VMHost object name, but the name to use for connecting to said VIServer for use of Get-EsxTop cmdlet -- so, do not use wildcards)
+        [parameter(Mandatory=$true)][string]$VMHostToCheck,
+
+        ## PSCredential to use for connecting to VMHost; will prompt for credentials if not passed in here
+        [System.Management.Automation.PSCredential]$Credential = $host.ui.PromptForCredential("Need credentials to connect to VMHost", "Please enter credentials for '$VMHostToCheck'", $null, $null)
+    ) ## end param
+
+    process {
+        $strThisVMHostName = $VMHostToCheck
+
+        ## check if VMHost name given is responsive on the network; if not, exit
+        if (-not (Test-Connection -Quiet -Count 3 -ComputerName $strThisVMHostName)) {Write-Warning "VMHost '$strThisVMHostName' not responding on network -- not proceeding"}
+        else {
+            ## connect to the given VIServer (VMHost, here); use -Force (new in PowerCLI v5.1) to "Suppress all user interface prompts during the cmdlet execution. Currently these include 'Multiple default servers' and 'Invalid certificate action'"
+            $oVIServer = Connect-VIServer $strThisVMHostName -Credential $Credential
+
+            ## if connecting to VMHost failed, write warning and exit
+            if (-not $oVIServer) {Write-Warning "Did not connect to VMHost '$strThisVMHostName' -- not proceeding"}
+            else {
+                ## array with PortID to vSwitch info, for determining vSwitch name from PortID
+                ## get vSwitch ("PortsetName") and PortID info, grouped by vSwitch
+                #$arrNetPortsetEntries = (Get-EsxTop -TopologyInfo NetPortset).Entries
+                ## or, get vSwitch ("PortsetName") and PortID info, not grouped
+                $arrNetPortEntries = (Get-EsxTop -Server $strThisVMHostName -TopologyInfo NetPort).Entries
+
+                ## calculated property for vSwitch name
+                $hshVSwitchInfo = @{n="vSwitch"; e={$oNetportCounterValue = $_; ($arrNetPortEntries | Where-Object {$_.PortId -eq $oNetportCounterValue.PortId}).PortsetName}}
+
+                ## get the VM, uplink NIC, vSwitch, and VMHost info
+                Get-EsxTop -Server $strThisVMHostName -CounterName NetPort | Select-Object ClientName, TeamUplink, $hshVSwitchInfo, @{n="VMHost"; e={$_.Server}}
+
+                Disconnect-VIServer $strThisVMHostName -Confirm:$false
+            } ## end else
+        } ## end else
+    } ## end process
+} ## end fn
+
 
 
 # ## other functions:
@@ -1022,67 +1087,6 @@ function Copy-VNVIRole {
 #             } ## end if
 #         } ## end else
 #     } ## end foreach-object
-# } ## end process
-
-
-
-
-# ## Get-UplinkNicForVM
-# <#  .Description
-#     Script to retrieve Netports' (portgroup ports) client, uplink info, vSwitch, etc. info.  Includes things like VMKernel ports and Mangement uplinks.  Nov 2012, Matt Boren
-#     Updated Apr 2015 -- cleaned up
-#     .Example
-#     Get-UplinkNicForVM -VMHost myhost0.dom.com -Cred (Get-Credential root)
-
-#     ClientName                    TeamUplink                    vSwitch                       VMHost
-#     ----------                    ----------                    -------                       ---------------
-#     Management                    n/a                           vSwitch0                      myhost0.dom.com
-#     vmk1                          vmnic0                        vSwitch0                      myhost0.dom.com
-#     vmk0                          vmnic0                        vSwitch0                      myhost0.dom.com
-#     myvm001                       vmnic0                        vSwitch0                      myhost0.dom.com
-#     myvm002                       vmnic3                        vSwitch1                      myhost0.dom.com
-#     myvm003                       vmnic5                        vSwitch2                      myhost0.dom.com
-#     ...
-
-#     Get the Netports on given VMHost, and return their client name, uplink vmnic, vSwitch, etc.
-#     .Outputs
-#     PSObject
-# #>
-
-# param(
-#     ## the VMHost DNS name whose VMs' uplink info to get (not VMHost object name -- so, do not use wildcards)
-#     [parameter(Mandatory=$true)][string]$VMHostToCheck,
-#     ## PSCredential to use for connecting to VMHost; will prompt for credentials if not passed in here
-#     [System.Management.Automation.PSCredential]$CredentialForVMHost = $host.ui.PromptForCredential("Need credentials to connect to VMHost", "Please enter credentials for '$VMHostToCheck'", $null, $null)
-# ) ## end param
-
-# process {
-#     $strThisVMHostName = $VMHostToCheck
-
-#     ## check if VMHost name given is responsive on the network; if not, exit
-#     if (-not (Test-Connection -Quiet -Count 3 -ComputerName $strThisVMHostName)) {Write-Warning "VMHost '$strThisVMHostName' not responding on network -- not proceeding"}
-#     else {
-#         ## connect to the given VIServer (VMHost, here); use -Force (new in PowerCLI v5.1) to "Suppress all user interface prompts during the cmdlet execution. Currently these include 'Multiple default servers' and 'Invalid certificate action'"
-#         $oVIServer = Connect-VIServer $strThisVMHostName -Credential $CredentialForVMHost
-
-#         ## if connecting to VMHost failed, write warning and exit
-#         if (-not $oVIServer) {Write-Warning "Did not connect to VMHost '$strThisVMHostName' -- not proceeding"}
-#         else {
-#             ## array with PortID to vSwitch info, for determining vSwitch name from PortID
-#             ## get vSwitch ("PortsetName") and PortID info, grouped by vSwitch
-#             #$arrNetPortsetEntries = (Get-EsxTop -TopologyInfo NetPortset).Entries
-#             ## or, get vSwitch ("PortsetName") and PortID info, not grouped
-#             $arrNetPortEntries = (Get-EsxTop -Server $strThisVMHostName -TopologyInfo NetPort).Entries
-
-#             ## calculated property for vSwitch name
-#             $hshVSwitchInfo = @{n="vSwitch"; e={$oNetportCounterValue = $_; ($arrNetPortEntries | Where-Object {$_.PortId -eq $oNetportCounterValue.PortId}).PortsetName}}
-
-#             ## get the VM, uplink NIC, vSwitch, and VMHost info
-#             Get-EsxTop -Server $strThisVMHostName -CounterName NetPort | Select-Object ClientName, TeamUplink, $hshVSwitchInfo, @{n="VMHost"; e={$_.Server}}
-
-#             Disconnect-VIServer $strThisVMHostName -Confirm:$false
-#         } ## end else
-#     } ## end else
 # } ## end process
 
 
