@@ -979,6 +979,129 @@ function Get-VNUplinkNicForVM {
 
 
 
+function Get-VNVMDiskAndRDM {
+<#  .Description
+    Function to get a VM's hard disk and RDM information.
+
+    .Example
+    Get-VM someVM | Get-VNVMDiskAndRDM
+    VMName            : someVM
+    HardDiskName      : Hard disk 1
+    ScsiId            : 0:0
+    DeviceDisplayName :
+    SizeGB            : 50
+    ScsiCanonicalName :
+
+    VMName            : someVM
+    HardDiskName      : Hard disk 2
+    ScsiId            : 1:0
+    DeviceDisplayName : someVM-/log_dir
+    SizeGB            : 20
+    ScsiCanonicalName : naa.60000111111115615641111111111111
+
+    Get the disks (including RDMs) for "someVM". Note, the ScsiCanonicalName property is only valid (and only populated for) RDM disks.
+
+    .Example
+    Get-VNVMDiskAndRDM -VMName someVM | ft -a
+    VMName   HardDiskName ScsiId DeviceDisplayName SizeGB ScsiCanonicalName
+    ------   ------------ ------ ----------------- ------ -----------------
+    someVM0  Hard disk 1  0:0                          50
+    someVM0  Hard disk 2  1:0    someVM0-/log_dir      20 naa.60000111111115615641111111111111
+    someVM1  Hard disk 1  0:0                         180
+    someVM1  Hard disk 2  1:0    someVM1-/log_dir     120 naa.60000111111115615641111111111112
+
+    Get the disks (including RDMs) for VMs matching the name regular expression pattern "someVM", formatting output in auto-sized table. Note, the ScsiCanonicalName property is only valid (and only populated for) RDM disks.
+
+    .Link
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding(DefaultParameterSetName="NameAsRegEx")]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    param(
+        ## Name pattern of VM for which to get information. This is a regular expression
+        [parameter(Mandatory=$true,ParameterSetName="NameAsRegEx",Position=0)][String[]]$VMName,
+
+        ## Literal name of VM for which to get information.  This RegEx-escapes the string and adds start/end anchors ("^" and "$") so that the only match is an exact match
+        [parameter(Mandatory=$true,ParameterSetName="NameAsLiteral",Position=0)][String[]]$VMLiteralName,
+
+        ## MoRef/Id of VM for which to get disk information -- most useful when passing VM or VirtualMachine object via pipeline
+        [parameter(ParameterSetName="ById",ValueFromPipelineByPropertyName=$true,Position=0)][Alias("MoRef")][string[]]$Id,
+
+        ## Switch: Also return the VMDK's datastore path?
+        [switch]$ShowVMDKDatastorePath
+    ) ## end param
+
+    begin {
+        $hshParamForGetViewForVMachine = @{Property = Write-Output Name Config.Hardware.Device Runtime.Host}
+    } ## end begin
+
+    process {
+        ## get the VM object(s) (the cool, FaF way using .NET View objects)
+        Switch ($PSCmdlet.ParameterSetName) {
+            {"NameAsRegEx","NameAsLiteral" -contains $_} {
+                $strThisParamSetName = $_
+                $hshParamForGetViewForVMachine["ViewType"] = "VirtualMachine"
+
+                ## make a temporary hashtable to be used for creating the Get-View filter string value, and the message for the warning (if any warning)
+                $hshParamForNewRegExPattern = Switch ($strThisParamSetName) {
+                    "NameAsRegEx" {
+                        @{String = $VMName; EscapeAsLiteral = $false}
+                        break
+                    } ## end case
+                    ## if literal, do escape as literal
+                    "NameAsLiteral" {
+                        @{String = $VMLiteralName; EscapeAsLiteral = $true}
+                    } ## end case
+                } ## end inner switch
+                ## make the actual RegEx pattern for the Get-View filter, joining all values, and escaping if strings are to be literal
+                $strVirtualMachineNameFilter = _New-RegExJoinedOrPattern @hshParamForNewRegExPattern
+                ## message for warning, if any warning
+                $strMessageForWarning = "name pattern '$strVirtualMachineNameFilter'"
+                $hshParamForGetViewForVMachine["Filter"] = @{"Name" = $strVirtualMachineNameFilter}
+                break
+            } ## end case
+            "ById" {
+                $hshParamForGetViewForVMachine["Id"] = $Id
+                $strMessageForWarning = "Id '$Id'"
+            } ## end case
+        } ## end outer switch
+        $arrVMViewsForStorageInfo = Get-View @hshParamForGetViewForVMachine
+        if (($arrVMViewsForStorageInfo | Measure-Object).Count -eq 0) {Throw "No VirtualMachine objects found matching $strMessageForWarning"} ## end if
+
+        $arrVMViewsForStorageInfo | Foreach-Object {
+            $viewVMForStorageInfo = $_
+            ## get the view of the HostSystem on which the VM currently resides
+            $viewHostWithStorage = Get-View -Id $viewVMForStorageInfo.Runtime.Host -Property Config.StorageDevice.ScsiLun
+
+            $viewVMForStorageInfo.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualDisk]} | Foreach-Object {
+                $hdThisDisk = $_
+                $oScsiLun = $viewHostWithStorage.Config.StorageDevice.ScsiLun | Where-Object {$_.UUID -eq $hdThisDisk.Backing.LunUuid}
+                ## the properties to return in new object
+                $hshThisVMProperties = ([ordered]@{
+                    VMName = $viewVMForStorageInfo.Name
+                    ## the disk's "name", like "Hard disk 1"
+                    HardDiskName = $hdThisDisk.DeviceInfo.Label
+                    ## get device's SCSI controller and Unit numbers (1:0, 1:3, etc)
+                    ScsiId = &{$strControllerKey = $_.ControllerKey.ToString(); "{0}`:{1}" -f $strControllerKey[$strControllerKey.Length - 1], $_.Unitnumber}
+                    DeviceDisplayName = $oScsiLun.DisplayName
+                    SizeGB = [Math]::Round($_.CapacityInKB / 1MB, 0)
+                    ScsiCanonicalName = $oScsiLun.CanonicalName
+                }) ## end hsh
+                ## add property for VMDKDStorePath if desired
+                if ($ShowVMDKDatastorePath) {$hshThisVMProperties["VMDKDStorePath"] = $hdThisDisk.Backing.Filename}
+                New-Object -Type PSObject -Property $hshThisVMProperties
+            } ## end foreach-object
+        } ## end foreach-object
+    } ## end process
+} ## end fn
+
+
+
+
+
 # ## other functions:
 # ## Evacuate-Datastore
 # <#  .Description
@@ -1091,95 +1214,6 @@ function Get-VNUplinkNicForVM {
 
 
 
-
-# ## Get-VMDiskAndRDM
-# <#  .Description
-#     Snippet of code to get a VM's hard disk and RDM info; Sep 2011 -- Matt Boren
-#     -updated Oct 2011 -- MBoren:  re-wrote to use .NET View objects instead of native cmdlets, so now it is much faster
-#     -updated Dec 2013 -- MBoren:  re-wrote to use New-Object instead of hashtables for calculated properties, and removed a redundant lookup that impacted speed by about 50%!  Go-o-o-o, FaF!
-#     -updated Sep 2014 -- MBoren:  added parameter Id for VM ID, added ability to accept value from pipeline for Id (good for piping VM objects and VirtualMachine objects to the function)
-#     .Example
-#     Get-VMDiskAndRDM -VM someVM
-#     Get the disks (including RDMs) for "someVM".  Output would be something like:
-#     VMName            : someVM
-#     HardDiskName      : Hard disk 1
-#     ScsiId            : 0:0
-#     DeviceDisplayName :
-#     SizeGB            : 50
-#     ScsiCanonicalName :
-
-#     VMName            : someVM
-#     HardDiskName      : Hard disk 2
-#     ScsiId            : 1:0
-#     DeviceDisplayName : someVM-/log_dir
-#     SizeGB            : 20
-#     ScsiCanonicalName : naa.60000111111115615641111111111111
-#     .Example
-#     Get-VMDiskAndRDM -VM someVM | ft -a
-#     Get the disks (including RDMs) for "someVM", formatting output in auto-sized table.  Output would be something like:
-#     VMName HardDiskName ScsiId DeviceDisplayName SizeGB ScsiCanonicalName
-#     ------ ------------ ------ ----------------- ------ -----------------
-#     someVM Hard disk 1  0:0                          50
-#     someVM Hard disk 2  1:0    someVM-/log_dir       20 naa.60000111111115615641111111111111
-# #>
-# [CmdletBinding(DefaultParameterSetName="ByName")]
-# param(
-#     ## Name pattern of the VM guest for which to get info
-#     [parameter(Mandatory=$true,ParameterSetName="ByName",Position=0)][string]$VM,
-#     ## MoRef of VM for which to get disk information
-#     [parameter(ParameterSetName="ById",ValueFromPipelineByPropertyName=$true,Position=0)][Alias("MoRef")][string[]]$Id,
-#     ## switch to specify that VMDK's datastore path should also be returned
-#     [switch]$ShowVMDKDatastorePath_sw
-# )
-
-# begin {
-#     $hshParamForGetViewForVMachine = @{Property = @("Name", "Config.Hardware.Device", "Runtime.Host")}
-# } ## end begin
-
-# process {
-#     <# the new, cool, FaF way (using .NET View objects) #>
-#     ## get the VM object(s)
-#     Switch ($PSCmdlet.ParameterSetName) {
-#         "ByName" {
-#             $hshParamForGetViewForVMachine["ViewType"] = "VirtualMachine"
-#             $hshParamForGetViewForVMachine["Filter"] = @{"Name" = "^$VM(\..*)?"}
-#             $strMessageForWarning = "name pattern '$VM'"
-#         } ## end case
-#         "ById" {
-#             $hshParamForGetViewForVMachine["Id"] = $Id
-#             $strMessageForWarning = "Id '$Id'"
-#         } ## end case
-#     } ## end switch
-#     $arrVMViewsForStorageInfo = Get-View @hshParamForGetViewForVMachine
-#     if (($arrVMViewsForStorageInfo | Measure-Object).Count -eq 0) {Throw "No VirtualMachine objects found matching $strMessageForWarning"} ## end if
-
-#     $arrVMViewsForStorageInfo | Foreach-Object {
-#         $viewVMForStorageInfo = $_
-#         ## get the view of the host on which the VM currently resides
-#         $viewHostWithStorage = Get-View -Id $viewVMForStorageInfo.Runtime.Host -Property Config.StorageDevice.ScsiLun
-
-#         $viewVMForStorageInfo.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualDisk]} | Foreach-Object {
-#             $hdThisDisk = $_
-#             $oScsiLun = $viewHostWithStorage.Config.StorageDevice.ScsiLun | Where-Object {$_.UUID -eq $hdThisDisk.Backing.LunUuid}
-#             ## the properties to return in new object
-#             $hshThisVMProperties = @{
-#                 VMName = $viewVMForStorageInfo.Name
-#                 ## the disk's "name", like "Hard disk 1"
-#                 HardDiskName = $hdThisDisk.DeviceInfo.Label
-#                 ## get device's SCSI controller and Unit numbers (1:0, 1:3, etc)
-#                 ScsiId = &{$strControllerKey = $_.ControllerKey.ToString(); "{0}`:{1}" -f $strControllerKey[$strControllerKey.Length - 1], $_.Unitnumber}
-#                 DeviceDisplayName = $oScsiLun.DisplayName
-#                 SizeGB = [Math]::Round($_.CapacityInKB / 1MB, 0)
-#                 ScsiCanonicalName = $oScsiLun.CanonicalName
-#             } ## end hsh
-#             ## the array of items to select for output
-#             $arrPropertiesToSelect = "VMName,HardDiskName,ScsiId,DeviceDisplayName,SizeGB,ScsiCanonicalName".Split(",")
-#             ## add property for VMDKDStorePath if desired
-#             if ($ShowVMDKDatastorePath_sw -eq $true) {$hshThisVMProperties["VMDKDStorePath"] = $hdThisDisk.Backing.Filename; $arrPropertiesToSelect += "VMDKDStorePath"}
-#             New-Object -Type PSObject -Property $hshThisVMProperties | Select $arrPropertiesToSelect
-#         } ## end foreach-object
-#     } ## end foreach-object
-# } ## end process
 
 
 
