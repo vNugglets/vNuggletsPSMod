@@ -180,6 +180,7 @@ function Get-VNVMByAddress {
     Use -AddressWildcard to find VMs with approximate IP
 
     .Link
+    Get-VNVMByRDM
     Get-VNVMByVirtualPortGroup
     http://vNugglets.com
 
@@ -221,6 +222,80 @@ function Get-VNVMByAddress {
 
 
 
+function Get-VNVMByRDM {
+<#  .Description
+    Function to find what VM(s) (if any) are using a LUN as an RDM, based on the LUN's SCSI canonical name. Assumes that the best practice of all hosts in a cluster seeing the same LUNs is followed.
+
+    .Example
+    Get-VNVMByRDM -CanonicalName naa.60000112233445501000000000000001 -Cluster someCluster
+    VMName            : myvm002
+    HardDiskName      : Hard disk 7
+    CompatibilityMode : physicalMode
+    CanonicalName     : naa.60000112233445501000000000000001
+    DeviceDisplayName : myvm002-logs
+    MoRef             : VirtualMachine-vm-174
+
+    Find VM using the given LUN as an RDM, returning an object with the information about that RDM harddisk on the VM
+
+    .Example
+    Get-VNVMByRDM -CanonicalName naa.60000112233445501000000000000002 -Cluster someCluster | ft -a VMName, HardDiskName, DeviceDisplayName, CanonicalName
+    VMName    HardDiskName  DeviceDisplayName   CanonicalName
+    ------    ----------    -----------------   -------------
+    myvm0050  Hard disk 10  myMSCluster-quorum  naa.60000112233445501000000000000002
+    myvm0051  Hard disk 10  myMSCluster-quorum  naa.60000112233445501000000000000002
+
+    Find VMs using the given LUN as an RDM, formatting output in auto-sized table with just the given properties
+
+    .Link
+    Get-VNVMByAddress
+    Get-VNVMByVirtualPortGroup
+    http://vNugglets.com
+
+    .Outputs
+    Zero or more PSObjects with info about the VM and its corresponding RDM disk
+#>
+    [CmdletBinding()]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    Param(
+        ## The canonical name(s) of the LUN(s) in question (the LUNs used as RDMs)
+        [parameter(Mandatory=$true)][string[]]$CanonicalName,
+
+        ## The cluster whose hosts see this LUN
+        [parameter(Mandatory=$true)][string]$ClusterName
+    ) ## end param
+
+    process {
+        ## get the View object of the cluster in question
+        $viewCluster = Get-View -ViewType ClusterComputeResource -Property Name -Filter @{"Name" = "^$([RegEx]::escape($ClusterName))$"}
+        ## get the View of a host in the given cluster (presumably all hosts in the cluster see the same storage)
+        $viewHostInGivenCluster = Get-View -ViewType HostSystem -Property Name -SearchRoot $viewCluster.MoRef | Get-Random
+        ## get the Config.StorageDevice.ScsiLun property of the host (retrieved _after_ getting the View object for speed, as this property is only retrieved for this object, not all hosts' View objects)
+        $viewHostInGivenCluster.UpdateViewData("Config.StorageDevice.ScsiLun")
+
+        ## get the View objects for all VMs in the given cluster
+        Get-View -ViewType VirtualMachine -Property Name, Config.Hardware.Device -SearchRoot $viewCluster.MoRef | Foreach-Object {$viewThisVM = $_
+            ## for all of the RDM devices on this VM, see if the canonical name matches the canonical name in question
+            $viewThisVM.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualDisk]) -and ("physicalMode","virtualMode" -contains $_.Backing.CompatibilityMode)} | Foreach-Object {
+                $hdThisDisk = $_
+                $lunScsiLunOfThisDisk = $viewHostInGivenCluster.Config.StorageDevice.ScsiLun | Where-Object {$_.UUID -eq $hdThisDisk.Backing.LunUuid}
+                ## if the canonical names match, create a new PSObject with some info about the VirtualDisk and the VM using it
+                if ($CanonicalName -contains $lunScsiLunOfThisDisk.CanonicalName) {
+                    New-Object -TypeName PSObject -Property ([ordered]@{
+                        VMName = $viewThisVM.Name
+                        HardDiskName = $hdThisDisk.DeviceInfo.Label
+                        CompatibilityMode = $_.Backing.CompatibilityMode
+                        CanonicalName = $lunScsiLunOfThisDisk.CanonicalName
+                        DeviceDisplayName = $lunScsiLunOfThisDisk.DisplayName
+                        MoRef = $viewThisVM.MoRef
+                    }) ## end new-object
+                } ## end if
+            } ## end where-object
+        } ## end where-object
+    } ## end process
+} ## end fn
+
+
+
 function Get-VNVMByVirtualPortGroup {
 <#  .Description
     Function to get information about which VMs are on a given virtual network (a.k.a. "virtual portgroup")
@@ -247,6 +322,7 @@ function Get-VNVMByVirtualPortGroup {
 
     .Link
     Get-VNVMByAddress
+    Get-VNVMByRDM
     http://vNugglets.com
 
     .Outputs
@@ -1211,67 +1287,3 @@ function Get-VNVMDiskAndRDM {
 #         } ## end else
 #     } ## end foreach-object
 # } ## end process
-
-
-
-
-
-
-# ## Get-VMWithGivenRDM
-# <#  .Description
-#     Code to find what VM (if any) is using a LUN as an RDM, based on the LUN's SCSI canonical name. Assumes that the best practice of all hosts in a cluster seeing the same LUNs is followed.  Nov 2011, Matt Boren
-#     Updated Dec 2013:  added ability to pass array of canonical names, changed verbose output to use Write-Verbose
-#     .Example
-#     Get-VMWithGivenRDM -CanonicalName naa.60000112233445501000000000000001 -Cluster someCluster | ft -a
-#     Find a VM using the given LUN as an RDM, formatting output in auto-sized table.  Output would be something like:
-
-#     VMName   VMDiskName   DeviceDisplayName CanonicalName
-#     ------   ----------   ----------------- -------------
-#     myvm0050 Hard disk 10 myvm0050-data     naa.60000112233445501000000000000001
-#     .Outputs
-#     Zero or more PSObjects with info about the VM and its RDM
-# #>
-
-# [CmdletBinding()]
-# Param(
-#     ## The canonical name of the LUN in question
-#     [parameter(Mandatory=$true)][string[]]$CanonicalName,
-#     ## The cluster whose hosts see this LUN
-#     [parameter(Mandatory=$true)][string]$ClusterName
-# ) ## end param
-
-# process {
-#     ## get the View object of the cluster in question
-#     $viewCluster = Get-View -ViewType ClusterComputeResource -Property Name -Filter @{"Name" = "^$([RegEx]::escape($ClusterName))$"}
-#     ## get the View of a host in the given cluster (presumably all hosts in the cluster see the same storage)
-#     $viewHostInGivenCluster = Get-View -ViewType HostSystem -Property Name -SearchRoot $viewCluster.MoRef | Get-Random
-#     ## get the Config.StorageDevice.ScsiLun property of the host (retrieved _after_ getting the View object for speed, as this property is only retrieved for this object, not all hosts' View objects)
-#     $viewHostInGivenCluster.UpdateViewData("Config.StorageDevice.ScsiLun")
-
-#     ## if matching device(s) found, store some info for later use
-#     $arrMatchingDisk = &{
-#         ## get the View objects for all VMs in the given cluster
-#         Get-View -ViewType VirtualMachine -Property Name, Config.Hardware.Device -SearchRoot $viewCluster.MoRef | Foreach-Object {$viewThisVM = $_
-#             ## for all of the RDM devices on this VM, see if the canonical name matches the canonical name in question
-#             $viewThisVM.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualDisk]) -and ("physicalMode","virtualMode" -contains $_.Backing.CompatibilityMode)} | Foreach-Object {
-#                 $hdThisDisk = $_
-#                 $lunScsiLunOfThisDisk = $viewHostInGivenCluster.Config.StorageDevice.ScsiLun | Where-Object {$_.UUID -eq $hdThisDisk.Backing.LunUuid}
-#                 ## if the canonical names match, create a new PSObject with some info about the VirtualDisk and the VM using it
-#                 if ($CanonicalName -contains $lunScsiLunOfThisDisk.CanonicalName) {
-#                     New-Object -TypeName PSObject -Property @{
-#                         VMName = $viewThisVM.Name
-#                         VMDiskName = $hdThisDisk.DeviceInfo.Label
-#                         CanonicalName = $lunScsiLunOfThisDisk.CanonicalName
-#                         DeviceDisplayName = $lunScsiLunOfThisDisk.DisplayName
-#                     } ## end new-object
-#                 } ## end if
-#             } ## end where-object
-#         } ## end where-object
-#     } ## end subexpression
-
-#     ## if a matching device was found, output its info
-#     if ($arrMatchingDisk) {$arrMatchingDisk | Select VMName, VMDiskName, DeviceDisplayName, CanonicalName}
-#     ## else, say so
-#     else {Write-Verbose "Booo. No matching disk device with canonical name in '$CanonicalName' found attached to a VM as an RDM in cluster '$ClusterName'"}
-# }
-
