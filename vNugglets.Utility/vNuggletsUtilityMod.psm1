@@ -18,7 +18,7 @@ $hshModuleMemberParams = @{
 	Function = Write-Output Connect-VNVIServer, Copy-VNVIRole, Disconnect-VNVIServer,
 		Get-VNNetworkClusterInfo, Get-VNUplinkNicForVM, Get-VNVMByAddress, Get-VNVMByRDM, Get-VNVMByVirtualPortGroup, Get-VNVMDiskAndRDM, Get-VNVMEVCInfo,
 		Get-VNVMHostBrokenUplink, Get-VNVMHostFirmwareInfo, Get-VNVMHostHBAWWN, Get-VNVMHostLogicalVolumeInfo, Get-VNVMHostNICFirmwareAndDriverInfo,
-		Move-VNTemplateFromVMHost, Update-VNTitleBarForPowerCLI
+		Invoke-VNEvacuateDatastore, Move-VNTemplateFromVMHost, Update-VNTitleBarForPowerCLI
 	Alias = $arrAliasNamesToExport
 } ## end hsh
 

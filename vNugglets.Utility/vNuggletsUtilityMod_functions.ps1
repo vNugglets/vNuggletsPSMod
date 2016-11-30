@@ -1176,114 +1176,114 @@ function Get-VNVMDiskAndRDM {
 
 
 
+function Invoke-VNEvacuateDatastore {
+<#  .Description
+    Script to evacuate virtual disks and/or VM config files from a given datastore; does not move the entire VM and all its disks if they reside elsewhere
 
+    .Example
+    Invoke-VNEvacuateDatastore -SourceDatastore datastoreToEvac -Destination destinationDatastore -RunAsync -OutVariable arrMyMoveTasks
+    Move virtual disks and/or VM config files (if any) from source datastore to the destination datastore, running asynchronously. This also saves the resulting tasks' MoRefs into the output variable $arrMyMoveTasks. One can then check status on these particular tasks like:  Get-Task -Id $arrMyMoveTasks
 
-# ## other functions:
-# ## Evacuate-Datastore
-# <#  .Description
-#     Script to evacuate virtual disks and/or VM config files from a given datastore; does not move the entire VM and all its disks if they reside elsewhere. Created 06-Nov-2012 by vNugglets.com.
-#     -updated 11-Nov-2012 by Matt Boren -- added comments, optimized syntax
-#     -updated 05-Dec-2012 by Allen Crawford -- added parameters and more comments
-#     -updated 11-Dec-2012 by Allen Crawford -- added ability to relocate VMs with no virtual disks as well as templates
-#     -updated 12-Dec-2012 by Matt Boren -- optimized syntax from previous change
-#     -updated Jun 2014 by Matt Boren
-#         -allows for datastorecluster for "DestDatastore" param, so as to move a datastore's contents to datastores in a datastore cluster
-#         -added WhatIf support
-#     -updated Sep 2014 by Matt Boren -- added ability to exclude a VM/template's files from evacuation process (via param)
-#     -updated Oct 2016 by Matt Boren -- added feature that uses any/all datastores in datastores cluster (when one is specified for Destination param) for potential destination _per object_ (potentially different datastore for each virtual disk on a VM)
-#     .Example
-#     EvacuateDatastore -SourceDatastore datastoreToEvac -DestDatastore destinationDatastore -RunAsync
-#     Move virtual disks and/or VM config files (if any) from source datastore to the destination datastore, running asynchronously
-#     .Example
-#     EvacuateDatastore -SourceDatastore datastoreToEvac -DestDatastore (Get-DatastoreCluster my_datastoreCluster)
-#     Move VM files from source datastore to datastores in given datastore cluster
-# #>
+    .Example
+    Invoke-VNEvacuateDatastore -SourceDatastore datastoreToEvac -Destination (Get-DatastoreCluster my_datastoreCluster) -Verbose
+    Synchronously and serially moves VM disks and files from source datastore to datastores in given datastore cluster, with a bit of Verbose output
 
-# [CmdletBinding(SupportsShouldProcess=$true)]
-# param(
-#     ## The name of the source datastore (the one to evacuate)
-#     [parameter(Mandatory=$true)][string]$SourceDatastore,
-#     ## The name of the destination datastore
-#     [parameter(Mandatory=$true)]$DestDatastore,
-#     ## Name of VM/template to exclude from evacuation activities (exact name)
-#     [string[]]$ExcludeVMName,
-#     ## Switch:  exclude templates from this evacuation effort?
-#     [Switch]$ExcludeAllTemplate,
-#     ## switch:  Run asynchonously?
-#     [switch]$RunAsync
-# ) ## end parameter
+    .Link
+    http://vNugglets.com
 
-# Begin {
-#     ## get the datastore View object, either from one of the datastore IDs in the datastorecluster (if passed), or by the datastore that matches the datastore name given
-#     $arrDestDatastoreView = if ($DestDatastore -is [VMware.VimAutomation.ViCore.Types.V1.DatastoreManagement.DatastoreCluster]) {
-#         Get-View -Id ($DestDatastore.ExtensionData.ChildEntity) -Property Name
-#     } else {Get-View -ViewType Datastore -Property Name -Filter @{"Name" = "^${DestDatastore}$"}}
-# } ## end begin
+    .Outputs
+    If running asynchronously, returns the VMware.Vim.ManagedObjectReference for each RelocateVM task. Else, returns nothing
+#>
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param(
+        ## The name of the source datastore (the one to evacuate)
+        [parameter(Mandatory=$true)][string]$SourceDatastore,
 
-# Process {
-#     ## Set proper variable name from the supplied parameter
-#     $strSrcDatastore = $SourceDatastore
+        ## The name of the destination datastore or datastore cluster, or a datastore cluster itself
+        [parameter(Mandatory=$true)]$Destination,
 
-#     ## Get the .NET view of the source datastore
-#     $viewSrcDatastore = Get-View -ViewType Datastore -Property Name -Filter @{"Name" = "^${strSrcDatastore}$"}
-#     ## Get the linked view that contains the list of VMs on the source datastore
-#     $viewSrcDatastore.UpdateViewData("Vm.Config.Files.VmPathName", "Vm.Config.Hardware.Device", "Vm.Config.Template", "Vm.Runtime.Host", "Vm.Name")
+        ## Name(s) of VM/template to exclude from evacuation activities (exact name)
+        [string[]]$ExcludeVMName,
 
-#     ## Create a VirtualMachineMovePriority object for the RelocateVM task; 0 = defaultPriority, 1 = highPriority, 2 = lowPriority (per http://pubs.vmware.com/vsphere-51/index.jsp?topic=%2Fcom.vmware.wssdk.apiref.doc%2Fvim.VirtualMachine.MovePriority.html)
-#     $specVMMovePriority = New-Object VMware.Vim.VirtualMachineMovePriority -Property @{"value__" = 1}
+        ## Switch:  exclude all templates on the source datastore from this evacuation effort?
+        [Switch]$ExcludeAllTemplate,
 
-#     ## For each VM View object, initiate the RelocateVM_Task() method; for each template object, initiate the RelocateVM() method
-#     $viewSrcDatastore.LinkedView.Vm | Foreach-Object {
-#         $viewVMToMove = $_
-#         ## if this machine was to be excluded, do not move its files
-#         if (($ExcludeAllTemplate -and ($viewVMToMove.Config.Template -eq "True")) -or ($ExcludeVMName -contains $viewVMToMove.Name)) {Write-Verbose -Verbose "not moving files for excluded machine '$($viewVMToMove.Name)'"}
-#         ## else, doit
-#         else {
-#             ## Create a VirtualMachineRelocateSpec object for the RelocateVM task
-#             $specVMRelocate = New-Object Vmware.Vim.VirtualMachineRelocateSpec
-#             ## Create an array containing all the virtual disks for the current VM/template
-#             $arrVirtualDisks = $viewVMToMove.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualDisk]}
-#             ## If the VM/template's config files reside on the source datastore, set this to the destination datastore (if not specified, the config files are not moved)
-#             if ($viewVMToMove.Config.Files.VmPathName.Split("]")[0].Trim("[") -eq $strSrcDatastore) {
-#                 $specVMRelocate.Datastore = ($arrDestDatastoreView | Get-Random).MoRef
-#             } ## end if
+        ## Switch:  Run asynchonously?  If not, this cmdlet runs synchronously, waiting for each virtual disk relocation before starting the next.
+        [switch]$RunAsync
+    ) ## end parameter
 
-#             ## For each VirtualDisk for this VM/template, make a VirtualMachineRelocateSpecDiskLocator object (to move disks that are on the source datastore, and leave other disks on their current datastore)
-#             ## But first, make sure the VM/template actually has any disks
-#             if ($arrVirtualDisks) {
-#                 foreach($oVirtualDisk in $arrVirtualDisks) {
-#                     $oVMReloSpecDiskLocator = New-Object VMware.Vim.VirtualMachineRelocateSpecDiskLocator -Property @{
-#                         ## If this virtual disk's filename matches the source datastore name, set the VMReloSpecDiskLocator Datastore property to the destination datastore's MoRef, else, set this property to the virtual disk's current datastore MoRef
-#                         DataStore = if ($oVirtualDisk.Backing.Filename -match $strSrcDatastore) {($arrDestDatastoreView | Get-Random).MoRef} else {$oVirtualDisk.Backing.Datastore}
-#                         DiskID = $oVirtualDisk.Key
-#                     } ## end new-object
-#                     $specVMRelocate.disk += $oVMReloSpecDiskLocator
-#                 } ## end foreach
-#             } ## end if
+    Begin {
+        ## get the datastore View object, either from one of the datastore IDs in the datastorecluster (if passed), or by the datastore that matches the datastore name given
+        $arrDestDatastoreView = if ($Destination -is [VMware.VimAutomation.ViCore.Types.V1.DatastoreManagement.DatastoreCluster]) {
+            Get-View -Id ($Destination.ExtensionData.ChildEntity) -Property Name
+        } else {Get-View -ViewType Datastore -Property Name -Filter @{"Name" = "^${Destination}$"}}
+    } ## end begin
 
-#             if ($PSCmdlet.ShouldProcess("VM '$($viewVMToMove.Name)'", "Relocate files from datastore '$($viewSrcDatastore.Name)', with '$($arrDestDatastoreView.Name -join ", ")' as potential destination")) {
-#                 ## Determine if template or VM, then perform necessary relocation steps
-#                 if ($viewVMToMove.Config.Template -eq "True") {
-#                     ## Gather necessary objects to mark template as a VM (VMHost where template currently resides and default, root resource pool of the cluster)
-#                     $viewTemplateVMHost = Get-View -Id $_.Runtime.Host -Property Parent
-#                     $viewTemplateResPool = Get-View -ViewType ResourcePool -Property Name -SearchRoot $viewTemplateVMHost.Parent -Filter @{"Name" = "^Resources$"}
-#                     ## Mark the template as a VM
-#                     $_.MarkAsVirtualMachine($viewTemplateResPool.MoRef, $viewTemplateVMHost.MoRef)
-#                     ## Relocate the template synchronously (i.e. one at a time)
-#                     Write-Verbose -Verbose "moving template '$($viewVMToMove.Name)' synchronously (template -> VM -> move datastores -> template)"
-#                     $oThisReloTask_moref = $viewVMToMove.RelocateVM_Task($specVMRelocate, $specVMMovePriority)
-#                     Write-Verbose "migrate task Id: '$oThisReloTask_moref'"
-#                     Get-Task -Id $oThisReloTask_moref | Wait-Task
-#                     ## Convert VM back to template
-#                     $viewVMToMove.MarkAsTemplate()
-#                 } ## end if
-#                 else {
-#                     ## Initiate the RelocateVM task (asynchronously), if RunAsync switch is $true
-#                     if ($RunAsync) {$viewVMToMove.RelocateVM_Task($specVMRelocate, $specVMMovePriority)}
-#                     ## else, invoke the RelocateVM method (synchronously)
-#                     else {$viewVMToMove.RelocateVM($specVMRelocate, $specVMMovePriority)}
-#                 } ## end else
-#             } ## end if
-#         } ## end else
-#     } ## end foreach-object
-# } ## end process
+    Process {
+        ## Set proper variable name from the supplied parameter
+        $strSrcDatastore = $SourceDatastore
+
+        ## Get the .NET view of the source datastore
+        $viewSrcDatastore = Get-View -ViewType Datastore -Property Name -Filter @{"Name" = "^${strSrcDatastore}$"}
+        ## Get the linked view that contains the list of VMs on the source datastore
+        $viewSrcDatastore.UpdateViewData("Vm.Config.Files.VmPathName", "Vm.Config.Hardware.Device", "Vm.Config.Template", "Vm.Runtime.Host", "Vm.Name")
+
+        ## Create a VirtualMachineMovePriority object for the RelocateVM task; 0 = defaultPriority, 1 = highPriority, 2 = lowPriority (per http://pubs.vmware.com/vsphere-51/index.jsp?topic=%2Fcom.vmware.wssdk.apiref.doc%2Fvim.VirtualMachine.MovePriority.html)
+        $specVMMovePriority = New-Object VMware.Vim.VirtualMachineMovePriority -Property @{"value__" = 1}
+
+        ## For each VM View object, initiate the RelocateVM_Task() method; for each template object, initiate the RelocateVM() method
+        $viewSrcDatastore.LinkedView.Vm | Foreach-Object {
+            $viewVMToMove = $_
+            ## if this machine was to be excluded, do not move its files
+            if (($ExcludeAllTemplate -and ($viewVMToMove.Config.Template -eq "True")) -or ($ExcludeVMName -contains $viewVMToMove.Name)) {Write-Verbose -Verbose "not moving files for excluded machine '$($viewVMToMove.Name)'"}
+            ## else, doit
+            else {
+                ## Create a VirtualMachineRelocateSpec object for the RelocateVM task
+                $specVMRelocate = New-Object Vmware.Vim.VirtualMachineRelocateSpec
+                ## Create an array containing all the virtual disks for the current VM/template
+                $arrVirtualDisks = $viewVMToMove.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualDisk]}
+                ## If the VM/template's config files reside on the source datastore, set this to the destination datastore (if not specified, the config files are not moved)
+                if ($viewVMToMove.Config.Files.VmPathName.Split("]")[0].Trim("[") -eq $strSrcDatastore) {
+                    $specVMRelocate.Datastore = ($arrDestDatastoreView | Get-Random).MoRef
+                } ## end if
+
+                ## For each VirtualDisk for this VM/template, make a VirtualMachineRelocateSpecDiskLocator object (to move disks that are on the source datastore, and leave other disks on their current datastore)
+                ## But first, make sure the VM/template actually has any disks
+                if ($arrVirtualDisks) {
+                    foreach($oVirtualDisk in $arrVirtualDisks) {
+                        $oVMReloSpecDiskLocator = New-Object VMware.Vim.VirtualMachineRelocateSpecDiskLocator -Property @{
+                            ## If this virtual disk's filename matches the source datastore name, set the VMReloSpecDiskLocator Datastore property to the destination datastore's MoRef, else, set this property to the virtual disk's current datastore MoRef
+                            DataStore = if ($oVirtualDisk.Backing.Filename -match $strSrcDatastore) {($arrDestDatastoreView | Get-Random).MoRef} else {$oVirtualDisk.Backing.Datastore}
+                            DiskID = $oVirtualDisk.Key
+                        } ## end new-object
+                        $specVMRelocate.disk += $oVMReloSpecDiskLocator
+                    } ## end foreach
+                } ## end if
+
+                if ($PSCmdlet.ShouldProcess("VM '$($viewVMToMove.Name)'", "Relocate files from datastore '$($viewSrcDatastore.Name)', with '$($arrDestDatastoreView.Name -join ", ")' as potential destination")) {
+                    ## Determine if template or VM, then perform necessary relocation steps
+                    if ($viewVMToMove.Config.Template -eq "True") {
+                        ## Gather necessary objects to mark template as a VM (VMHost where template currently resides and default, root resource pool of the cluster)
+                        $viewTemplateVMHost = Get-View -Id $_.Runtime.Host -Property Parent
+                        $viewTemplateResPool = Get-View -ViewType ResourcePool -Property Name -SearchRoot $viewTemplateVMHost.Parent -Filter @{"Name" = "^Resources$"}
+                        ## Mark the template as a VM
+                        $_.MarkAsVirtualMachine($viewTemplateResPool.MoRef, $viewTemplateVMHost.MoRef)
+                        ## Relocate the template synchronously (i.e. one at a time)
+                        Write-Verbose -Verbose "moving template '$($viewVMToMove.Name)' synchronously (template -> VM -> move datastores -> template)"
+                        $oThisReloTask_moref = $viewVMToMove.RelocateVM_Task($specVMRelocate, $specVMMovePriority)
+                        Write-Verbose "migrate task Id: '$oThisReloTask_moref'"
+                        Get-Task -Id $oThisReloTask_moref | Wait-Task
+                        ## Convert VM back to template
+                        $viewVMToMove.MarkAsTemplate()
+                    } ## end if
+                    else {
+                        ## Initiate the RelocateVM task (asynchronously), if RunAsync switch is $true
+                        if ($RunAsync) {$viewVMToMove.RelocateVM_Task($specVMRelocate, $specVMMovePriority)}
+                        ## else, invoke the RelocateVM method (synchronously)
+                        else {$viewVMToMove.RelocateVM($specVMRelocate, $specVMMovePriority)}
+                    } ## end else
+                } ## end if
+            } ## end else
+        } ## end foreach-object
+    } ## end process
+} ## end fn
