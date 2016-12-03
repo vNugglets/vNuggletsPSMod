@@ -1,6 +1,6 @@
 ### ChangeLog for vNugglets.Utility PowerShell module
 
-#### for release v1.x
+#### Release v1.0
 
 - created module from many of the juicy snippets/functions that we shared at [vNugglets.com](http://vNugglets.com) over the years
 - updated `Copy-VNVIRole` to be a safer function overall by removing old `Invoke-Expression` methodology
@@ -16,4 +16,5 @@
   - `Get-VNVMByVirtualPortGroup` was "Get-VMOnNetworkPortGroup"
   - `Get-VNVMHostBrokenUplink` was "Get-BustedVmnic"
   - `Invoke-VNEvacuateDatastore` was "Evacuate-Datastore"
-- added proper comment-based help to all cmdlets (see PowerShell Help topic `about_Comment_Based_Help`)
+- added proper comment-based help to all cmdlets (as described in PowerShell Help topic `about_Comment_Based_Help`)
+- included "about" help topic, `about_vNugglets.Utility`

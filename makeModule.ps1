@@ -20,7 +20,7 @@ $hshModManifestParams = @{
 	VariablesToExport = @()
 	AliasesToExport = @()
 	CmdletsToExport = @()
-	FileList = Write-Output vNugglets.Utility.psd1 vNuggletsUtilityMod.psm1 vNuggletsUtilityMod_functions.ps1, vNugglets_SupportingFunctions.ps1
+	FileList = Write-Output vNugglets.Utility.psd1 vNuggletsUtilityMod.psm1 vNuggletsUtilityMod_functions.ps1, vNugglets_SupportingFunctions.ps1, about_vNugglets.Utility.help.txt
 	Verbose = $true
 }
 ## using -PassThru so as to pass the generated module manifest contents to a var for later output as ASCII (instead of having a .psd1 file of default encoding, Unicode)
