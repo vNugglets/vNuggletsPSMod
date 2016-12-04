@@ -16,5 +16,6 @@
   - `Get-VNVMByVirtualPortGroup` was "Get-VMOnNetworkPortGroup"
   - `Get-VNVMHostBrokenUplink` was "Get-BustedVmnic"
   - `Invoke-VNEvacuateDatastore` was "Evacuate-Datastore"
+- started writing the Pester tests for the cmdlets (many more to go, still)
 - added proper comment-based help to all cmdlets (as described in PowerShell Help topic `about_Comment_Based_Help`)
 - included "about" help topic, `about_vNugglets.Utility`
