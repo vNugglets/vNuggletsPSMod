@@ -11,12 +11,30 @@ Some of the functionality provided by the cmdlets in this module:
 - Datastore evacuation, template evacuation from VMHosts
 - Mining virtual portgroup information (cluster-locations)
 
+### QuickStart
+Chomping at the bit to get going with using this module? Of course you are! Go like this:
+- download the module, either from the latest release's .zip file on the [vNugglets.Utility Releases](https://github.com/vNugglets/vNuggletsPSMod/releases) page, or by cloning the project to some local folder with Git via:  
+  `PS C:\> git clone https://github.com/vNugglets/vNuggletsPSMod.git C:\temp\MyVNuggsRepoCopy`
+- put the actual PowerShell module directory in some place that you like to keep your modules, say, like this, which copies the module to your personal Modules directory:  
+  `PS C:\> Copy-Item -Recurse -Path C:\temp\MyVNuggsRepoCopy\vNugglets.Utility\ -Destination ~\Documents\WindowsPowerShell\Modules\vNugglets.Utility`
+- import the PowerShell module into the current PowerShell session:  
+  `PS C:\> Import-Module -Name vNugglets.Utility`  
+  or, if the vNugglets.Utility module folder is not in your `Env:\PSModulePath`, specify the whole path to the module folder, like:  
+  `PS C:\> Import-Module -Name \\myserver.dom.com\PSModules\vNugglets.Utility`
 
+### Examples
+There are examples of some of the usages of the cmdlets in this PowerShell module at the module's GitHub Pages page [https://vNugglets.github.io/vNuggletsPSMod](https://vNugglets.github.io/vNuggletsPSMod/)
+
+### Getting Help
 The cmdlets in this module all have proper help, so you can learn and discover just as you would and do with any other legitimate PowerShell module:  
 - `Get-Command -Module <moduleName>`
 - `Get-Help -Full <cmdlet-name>`
 
+### Other Notes
 A few notes on updates to this repo:
+
+Dec 2016
+- initial public release
 
 Nov 2016
 - started whole hog on creating PowerShell module to try to contain all of this goodness
