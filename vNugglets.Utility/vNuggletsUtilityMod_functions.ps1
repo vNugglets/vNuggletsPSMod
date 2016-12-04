@@ -799,7 +799,7 @@ function Connect-VNVIServer {
     Function to use for connecting to VIServers instead of the default "Connect-VIServer" cmdlet -- includes call to function to update PowerShell window's title bar with the VIServer(s) to which the current session has connections
 
     .Example
-    Connect-VNVIServer -Credential $myCred -VIServer myVC0.dom.com, myVC1.dom.com
+    Connect-VNVIServer -Credential $myCred -Server myVC0.dom.com, myVC1.dom.com
     Connects to the given vCenters using the given credentials, and updates the PowerShell window's title bar accordingly
 
     .Link
@@ -812,7 +812,7 @@ function Connect-VNVIServer {
 #>
     param(
         ## Name of VI server to which to connect
-        [parameter(Mandatory=$true, Position=0)][string[]]$VIServer,
+        [parameter(Mandatory=$true, Position=0)][string[]]$Server,
 
         ## Credential to use for connection
         [parameter(Position=1)][ValidateNotNullOrEmpty()][System.Management.Automation.PSCredential]$Credential
@@ -820,7 +820,7 @@ function Connect-VNVIServer {
 
     process {
         ## check that given target VIServers are responsive to ping requests (assumes that ICMP echo traffic is allowed from the target machine)
-        $arrVIServersToWhichToConnect = $VIServer | Foreach-Object {
+        $arrVIServersToWhichToConnect = $Server | Foreach-Object {
             $strVIServerToWhichToConnect = $_
             if (-not (Test-Connection -Quiet -Count 2 $strVIServerToWhichToConnect)) {Write-Warning "server at '$strVIServerToWhichToConnect' not reachable; not trying to connect"}
             else {$strVIServerToWhichToConnect}
@@ -854,11 +854,11 @@ function Disconnect-VNVIServer {
 #>
     param (
         ## Name(s) of the VIServers from which to disconnect.  Accepts wildcards.  Disconnects from all VIServer if none specified here.
-        [string[]]$VIServer = "*"
+        [string[]]$Server = "*"
     ) ## end param
 
     process {
-        Disconnect-VIServer -Server $VIServer -Confirm:$false
+        Disconnect-VIServer -Server $Server -Confirm:$false
         ## update the PowerShell WindowTitle
         Update-VNTitleBarForPowerCLI
     } ## end process
