@@ -1,0 +1,6 @@
+{
+  "name": "vNugglets.Utility",
+  "tagline": "A PowerShell module with nearly all of the vNugglets goodness from over the years, all in one place!",
+  "body": "## vNugglets.Utility PowerShell module ##\r\n\r\nSome examples and their sample output (see each cmdlet's help for more examples):\r\n### Do something\r\n\t\tPS C:\\> Connect-VNVIServer -Credential (Get-Credential dom\\user) -Server myVC.dom.com\r\n\t\tWindows PowerShell credential request\r\n\r\n",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
