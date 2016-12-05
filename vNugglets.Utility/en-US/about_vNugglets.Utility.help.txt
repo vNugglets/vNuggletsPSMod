@@ -1,0 +1,44 @@
+TOPIC
+    about_vNugglets.Utility
+
+SHORT DESCRIPTION
+    Module encapsulating vNugglets.com functions and code snippets
+
+LONG DESCRIPTION
+    A module that centralizes the functions and code snippets from vNugglets.com
+    into a cohesive toolset.
+
+    The cmdlets in this module focus largely (almost exclusively) on VMware
+    virtual infrastructure.  Some of the areas of focus are:
+      - VIRole management (copying/duplicating)
+      - Finding VMs in inventory by attributes other than "name", like by the
+          guest IP address, by the RDMs it may have, by the virtual portgroup to
+          which it is connected
+      - Mining VMHost information, like host and peripheral firmware
+          information, HBA WWNs, logical drive information, information about
+          "broken" vmnics
+      - Establishing VM network to virtual portgroup physical uplink
+          relationship information (which of the active uplinks is VM0 actually
+          currently using?)
+      - Mining VM information, like standard and RDM disks, EVC setting
+      - vCenter connection information (in title of PowerShell window)
+      - Datastore evacuation, template evacuation from VMHosts
+      - Mining virtual portgroup information (cluster-locations)
+
+EXAMPLES
+    All of the cmdlets in this module have proper comment-based help.  Discover
+    and learn via the standard PowerShell way:
+
+        Get-Help -Full <cmdlet-name>
+
+KEYWORDS
+    vNugglets
+    vNuggs
+    vNuggies
+    vNooget
+    vNoogets
+    vNooglets
+
+SEE ALSO
+    vNugglets.com
+    github.com/vNugglets
