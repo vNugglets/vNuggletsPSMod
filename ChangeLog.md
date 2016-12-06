@@ -1,6 +1,6 @@
 ### ChangeLog for vNugglets.Utility PowerShell module
 
-#### Release v1.0
+#### v1.0, released 05 Dec 2016
 
 - created module from many of the juicy snippets/functions that we shared at [vNugglets.com](http://vNugglets.com) over the years
 - updated `Copy-VNVIRole` to be a safer function overall by removing old `Invoke-Expression` methodology
