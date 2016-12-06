@@ -1,3 +1,66 @@
+function Find-VNVMWithDuplicateMACAddress {
+<#  .Description
+    Get information about the VM(s) that have a network adapter whose MAC address is a duplicate of another network adapter in the vCenter(s) to which this PowerCLI session is connected
+
+    .Synopsis
+    Get information about duplicate MAC addresses
+
+    .Example
+    Find-VNVMWithDuplicateMACAddress
+    VMName                DuplicatedMAC         MoRef                                                Count
+    ------                -------------         -----                                                -----
+    {myVM03, oldVM322}    00:50:56:3F:FF:FF     {VirtualMachine-vm-16277, VirtualMachine-vm-109}         2
+
+    Find VMs with network adapters whose MAC address is the same, and return a bit of info about them
+
+    .Example
+    Find-VNVMWithDuplicateMACAddress
+    VMName     DuplicatedMAC         MoRef                       Count
+    ------     -------------         -----                       -----
+    myVM21     00:50:56:00:00:09     VirtualMachine-vm-16277         2
+
+    Find VM (just one, apparently, in this vCenter) with network adapters whose MAC address is the same -- in this case, the VM has at least two network adapters, both of which have the same MAC address
+
+    .Link
+    http://vNugglets.com
+
+    .Outputs
+    System.Management.Automation.PSCustomObject
+#>
+    [CmdletBinding()]
+    [OutputType([System.Management.Automation.PSCustomObject])]
+    Param () ## end param
+
+    process {
+        ## get VirtualMachine .NET views where the items is not marked as a Template
+        $colDevMacAddrInfo = `
+        Get-View -ViewType VirtualMachine -Property Name,Config.Hardware.Device -Filter @{"Config.Template" = "False"} | Foreach-Object {
+           $viewThisVM = $_
+           $_.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualEthernetCard]} | Foreach-Object {
+               New-Object -Type PSObject -Property @{VMName = $viewThisVM.Name; MacAddr = $_.MacAddress; MoRef = $viewThisVM.MoRef}
+           } ## end foreach-object
+        } ## end foreach-object
+
+        ## get the non-unique MAC addresses (if any),
+        $arrDuplicatedMAC_GroupInfo = $colDevMacAddrInfo | Group-Object MacAddr | Where-Object {$_.count -gt 1}
+
+        ## for each duplicated MAC, return an object with the given properties
+        if ($null -ne $arrDuplicatedMAC_GroupInfo) {
+            $arrDuplicatedMAC_GroupInfo | Foreach-Object {
+                New-Object -Type PSObject -Property ([ordered]@{
+                    VMName = $_.Group | Foreach-Object {$_.VMName} | Select-Object -Unique
+                    DuplicatedMAC = $_.Name
+                    MoRef = $_.Group | Foreach-Object {$_.MoRef} | Select-Object -Unique
+                    Count = $_.Count
+                }) ## end new-object
+            } ## end foreach-object
+        } ## end if
+        else {Write-Verbose "no duplicate MAC addresses found on non-template VMs"}
+    } ## end process
+} ## end function
+
+
+
 function Get-VNNetworkClusterInfo {
 <#  .Description
     Get information about the VMware HA Cluster(s) in which the given virtual network (virtual portgroup) is defined. May 2015
