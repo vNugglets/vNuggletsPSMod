@@ -16,8 +16,9 @@
 
 ### Doing
 
-\[feat_UpdateCmdlets]:
-- update function `Get-VNVMEVCInfo` to take Cluster object from pipeline
-
 done:
+
+\[feat_UpdateCmdlets]:
+
 - added function `Find-VNVMWithDuplicateMACAddress` for finding duplicate VM NIC MAC address in vCenter
+- updated function `Get-VNVMEVCInfo` to take Cluster object from pipeline, and to take VM object instead of VMId (far better usability)

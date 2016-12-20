@@ -440,9 +440,9 @@ function Get-VNVMByVirtualPortGroup {
 
 function Get-VNVMEVCInfo {
 <#  .Description
-    Code to get VMs' EVC mode and that of the cluster in which the VMs reside.  May 2014, Matt Boren
+    Function to get VMs' EVC mode and that of the cluster in which the VMs reside
     .Example
-    Get-VNVMEVCInfo -Cluster myCluster | ?{$_.VMEVCMode -ne $_.ClusterEVCMode}
+    Get-Cluster myCluster | Get-VNVMEVCInfo | ?{$_.VMEVCMode -ne $_.ClusterEVCMode}
     Name        PowerState   VMEVCMode   ClusterEVCMode   ClusterName
     ----        ----------   ---------   --------------   -----------
     myvm001     poweredOff               intel-nehalem    myCluster0
@@ -451,8 +451,8 @@ function Get-VNVMEVCInfo {
     Get all VMs in given clusters where the VM's EVC mode does not match the Cluster's EVC mode
 
     .Example
-    Get-VM myVM | Get-VNVMEVCInfo
-    Get the EVC info for the given VM and the cluster in which it resides
+    Get-VM myVM0,myVM1 | Get-VNVMEVCInfo
+    Get the EVC info for the given VMs and the cluster in which they reside
 
     .Outputs
     System.Management.Automation.PSCustomObject
@@ -460,11 +460,11 @@ function Get-VNVMEVCInfo {
     [CmdletBinding(DefaultParameterSetName="ByCluster")]
     [OutputType([System.Management.Automation.PSCustomObject])]
     param(
-        ## Cluster name pattern (regex) to use for getting the clusters whose VMs to get
-        [parameter(ParameterSetName="ByCluster",Position=0)][string]$Cluster = ".+",
+        ## Cluster whose VMs about which to get EVC information
+        [parameter(ValueFromPipeline=$true,ParameterSetName="ByCluster",Position=0)][VMware.VimAutomation.Types.Cluster[]]$Cluster,
 
-        ## Id/MoRef of VM for which to get EVC info
-        [parameter(ValueFromPipelineByPropertyName=$true,ParameterSetName="ByVMId",Position=0)][Alias("Id","MoRef")][string[]]$VMId
+        ## VM for which to get EVC info
+        [parameter(ValueFromPipeline=$true,ParameterSetName="ByVM",Position=0)][VMware.VimAutomation.Types.VirtualMachine[]]$VM
     ) ## end param
 
     begin {
@@ -489,7 +489,7 @@ function Get-VNVMEVCInfo {
 
         Switch ($PSCmdlet.ParameterSetName) {
             "ByCluster" {
-                Get-View -ViewType ClusterComputeResource -Property Name,Summary -Filter @{"Name" = $Cluster} | Foreach-Object {
+                Get-View -Property Name,Summary -Id $Cluster.Id | Foreach-Object {
                     $viewThisCluster = $_
                     Get-View -ViewType VirtualMachine @hshParamForGetVMView -SearchRoot $viewThisCluster.MoRef | Foreach-Object {
                         _New-InfoObj -VMView $_ -ClusterEVCModeKey $viewThisCluster.Summary.CurrentEVCModeKey -ClusterName $viewThisCluster.Name
@@ -497,8 +497,8 @@ function Get-VNVMEVCInfo {
                 } ## end foreach-object
                 break
             } ## end case
-            "ByVMId" {
-                Get-View @hshParamForGetVMView -Id $VMId | Foreach-Object {
+            "ByVM" {
+                Get-View @hshParamForGetVMView -Id $VM.Id | Foreach-Object {
                     ## update the View data to get the cluster name and the cluster summary (which has the cluster's EVCMode)
                     $_.UpdateViewData("Runtime.Host.Parent.Name")
                     $_.Runtime.LinkedView.Host.LinkedView.Parent.UpdateViewData("Summary")
