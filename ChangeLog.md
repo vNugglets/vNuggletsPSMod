@@ -1,5 +1,10 @@
 ### ChangeLog for vNugglets.Utility PowerShell module
 
+#### v1.1, released 20 Dec 2016
+
+- \[new] added function `Find-VNVMWithDuplicateMACAddress` for finding duplicate VM NIC MAC address in vCenter
+- \[improvement] updated function `Get-VNVMEVCInfo` to take Cluster object from pipeline, and to take VM object instead of VMId (far better usability)
+
 #### v1.0, released 05 Dec 2016
 
 - created module from many of the juicy snippets/functions that we shared at [vNugglets.com](http://vNugglets.com) over the years
