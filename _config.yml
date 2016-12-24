@@ -1,0 +1,8 @@
+title: vNugglets.Utility
+description: A PowerShell module with nearly all of the vNugglets goodness from over the years, all in one place!
+google_analytics: 
+show_downloads: true
+theme: jekyll-theme-cayman
+
+gems:
+  - jekyll-mentions
