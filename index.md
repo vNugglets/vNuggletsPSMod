@@ -176,7 +176,7 @@ ScsiCanonicalName : naa.60000111111115615641111111111111
 Get the disks (including RDMs) for VMs matching the name regular expression pattern "someVM", formatting output in auto-sized table. Note, the ScsiCanonicalName property is only valid (and only populated for) RDM disks
 
 ```powershell
-PS C:\>Get-VNVMDiskAndRDM -VMName someVM | ft -a
+PS C:\> Get-VNVMDiskAndRDM -VMName someVM | ft -a
 VMName   HardDiskName ScsiId DeviceDisplayName SizeGB ScsiCanonicalName
 ------   ------------ ------ ----------------- ------ -----------------
 someVM0  Hard disk 1  0:0                          50
@@ -236,7 +236,7 @@ myVMHost.dom.com  vmhba3      10:00:00:00:aa:bb:cc:86  20:00:00:00:aa:bb:cc:86  
 #### `Get-VNVMHostLogicalVolumeInfo`: Get VMHosts' logical volume information
 
 ```powershell
-PS C:\>Get-Cluster myCluster0 | Get-VMHost | Get-VNVMHostLogicalVolumeInfo
+PS C:\> Get-Cluster myCluster0 | Get-VMHost | Get-VNVMHostLogicalVolumeInfo
 VMHostName          LogicalVolume
 ----------          -------------
 myhost20.dom.com    Logical Volume 1 on HPSA1 : RAID 1 : 136GB : Disk 1,2
@@ -247,7 +247,7 @@ myhost22.dom.com    Logical Volume 1 on HPSA1 : RAID 1 : 279GB : Disk 1,2,3
 #### `Get-VNVMHostNICFirmwareAndDriverInfo`: Grab NIC driver- and firmware version(s) for NICs on VMHosts
 
 ```powershell
-PS C:\>Get-Cluster myCluster0 | Get-VMHost | Get-VNVMHostNICFirmwareAndDriverInfo | sort VMHostName
+PS C:\> Get-Cluster myCluster0 | Get-VMHost | Get-VNVMHostNICFirmwareAndDriverInfo | sort VMHostName
 VMHostName         NicDriverVersion        NicFirmwareVersion
 ----------         ----------------        ------------------
 myhost0.dom.com    nx_nic driver 5.0.619   nx_nic device firmware 4.0.588
