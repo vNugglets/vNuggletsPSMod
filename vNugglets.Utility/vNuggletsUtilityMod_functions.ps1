@@ -227,9 +227,9 @@ function Get-VNVMByAddress {
 
     .Example
     Get-VNVMByAddress -IP 10.37.31.12
-    Name     IP                                         MoRef
-    ------   ---                                        -----
-    myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13
+    Name     IP                                         MoRef                  Client
+    ------   ---                                        -----                  ------
+    myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13   VMware.Vim.VimClientImpl
 
     Get VMs with given IP as reported by VMware Tools, return VM name and its IP addresses
 
@@ -242,13 +242,29 @@ function Get-VNVMByAddress {
 
     Use -AddressWildcard to find VMs with approximate IP
 
+    .Example
+    Get-VNVMByAddress -IP 10.37.31.12
+    Name     GuestHostname    MoRef                  Client
+    ------   -------------    -----                  ------
+    myvm10   myvm10.dom.com   VirtualMachine-vm-13   VMware.Vim.VimClientImpl
+
+    Get VMs with given hostname configured in the guest OS as reported by VMware Tools, return VM name and its guest hostname
+
+    .Example
+    Get-VNVMByAddress -Uuid b99b546a-ee00-43f3-856a-80779ffddd0e
+    Name     Uuid                                   MoRef                     Client
+    ------   ----                                   -----                     ------
+    myvm37   b99b546a-ee00-43f3-856a-80779ffddd0e   VirtualMachine-vm-19991   VMware.Vim.VimClientImpl
+
+    Get VMs with given SMBIOS UUID, return VM name and its UUID
+
     .Link
     Get-VNVMByRDM
     Get-VNVMByVirtualPortGroup
     http://vNugglets.com
 
     .Notes
-    Finding VMs by IP address relies on information returned from VMware Tools in the guest, so those must be installed in the guest and have been running in the guest at least recently.
+    Finding VMs by IP address / Guest hostname relies on information returned from VMware Tools in the guest, so VMware Tools must be installed in the guest and have been running in the guest at least recently.
 
     .Outputs
     Selected.VMware.Vim.VirtualMachine
@@ -263,8 +279,21 @@ function Get-VNVMByAddress {
         [parameter(Mandatory=$true,ParameterSetName="FindByIP",Position=0)][ValidateScript({[bool][System.Net.IPAddress]::Parse($_)})][string]$IP,
 
         ## wildcard string IP address (standard wildcards like "10.0.0.*"), if finding VM by approximate IP
-        [parameter(Mandatory=$true,ParameterSetName="FindByIPWildcard",Position=0)][string]$AddressWildcard
+        [parameter(Mandatory=$true,ParameterSetName="FindByIPWildcard",Position=0)][string]$AddressWildcard,
+
+        ## Fully qualified DNS hostname as it appears in guest OS, for finding VM by guest hostname
+        [parameter(Mandatory=$true,ParameterSetName="FindByGuestHostname",Position=0)][string]$GuestHostname,
+
+        ## VM SMBIOS UUID, for finding VM by UUID
+        [parameter(Mandatory=$true,ParameterSetName="FindByUuid",Position=0)][string]$Uuid
     ) ## end param
+
+    begin {
+        ## array of properties to select on VirtualMachine object return when searching by IP or IP Wildcard, by Guest hostname, etc.
+        $arrPropertiesForReturnWhenSearchByIP = "Name", @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, "MoRef", "Client"
+        $arrPropertiesForReturnWhenSearchByGuestHostname = "Name", @{n="GuestHostname"; e={$_.Guest.HostName}}, "MoRef", "Client"
+        $arrPropertiesForReturnWhenSearchByUuid = "Name", @{n="Uuid"; e={$_.Config.Uuid}}, "MoRef", "Client"
+    } ## end begin
 
     Process {
         Switch ($PsCmdlet.ParameterSetName) {
@@ -273,11 +302,44 @@ function Get-VNVMByAddress {
                 Get-View -Viewtype VirtualMachine -Property Name, Config.Hardware.Device | Where-Object {$_.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualEthernetCard]) -and ($MAC -contains $_.MacAddress)}} | Select-Object Name, @{n="MacAddress"; e={$_.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualEthernetCard]} | Foreach-Object {$_.MacAddress} | Sort-Object}}, MoRef
                 break
             } ## end case
-            {"FindByIp","FindByIPWildcard" -contains $_} {
+            "FindByIp" {
+                ## get the SearchIndex object(s) (one from each connected vCenter)
+                Get-View -Id SearchIndex-SearchIndex -PipelineVariable viewThisSearchIndex | Foreach-Object {
+                    ## the vCenter name for this SearchIndex (ServiceUrl is like "https://myvcenter.dom.com/sdk", and the .Host property of a .NET URI object is just the DNS hostname portion of the URI)
+                    $strVcenterOfThisSearchIndex = ([System.Uri]$viewThisSearchIndex.Client.ServiceUrl).Host
+                    ## SearchIndex Find* methods return MoRefs; docs at http://pubs.vmware.com/vsphere-65/index.jsp#com.vmware.wssdk.apiref.doc/vim.SearchIndex.html
+                    #   FindAllByIp(moref datacenter*, string ip, bool vmSearch)
+                    $viewThisSearchIndex.FindAllByIp($null, $IP, $true) | Select-Object -Unique | Foreach-Object {Get-View -Id $_ -Property Name, Guest.Net -Server $strVcenterOfThisSearchIndex} | Select-Object -Property $arrPropertiesForReturnWhenSearchByIP
+                } ## end foreach-object
+                break
+            } ## end case
+            "FindByGuestHostname" {
+                ## get the SearchIndex object(s) (one from each connected vCenter)
+                Get-View -Id SearchIndex-SearchIndex -PipelineVariable viewThisSearchIndex | Foreach-Object {
+                    ## the vCenter name for this SearchIndex (ServiceUrl is like "https://myvcenter.dom.com/sdk", and the .Host property of a .NET URI object is just the DNS hostname portion of the URI)
+                    $strVcenterOfThisSearchIndex = ([System.Uri]$viewThisSearchIndex.Client.ServiceUrl).Host
+                    ## SearchIndex Find* methods return MoRefs; docs at http://pubs.vmware.com/vsphere-65/index.jsp#com.vmware.wssdk.apiref.doc/vim.SearchIndex.html
+                    #   FindAllByDnsName(moref datacenter*, string dnsName, bool vmSearch)
+                    $viewThisSearchIndex.FindAllByDnsName($null, $GuestHostname, $true) | Select-Object -Unique | Foreach-Object {Get-View -Id $_ -Property Name, Guest.HostName -Server $strVcenterOfThisSearchIndex} | Select-Object -Unique -Property $arrPropertiesForReturnWhenSearchByGuestHostname
+                } ## end foreach-object
+                break
+            } ## end case
+            "FindByUuid" {
+                ## get the SearchIndex object(s) (one from each connected vCenter)
+                Get-View -Id SearchIndex-SearchIndex -PipelineVariable viewThisSearchIndex | Foreach-Object {
+                    ## the vCenter name for this SearchIndex (ServiceUrl is like "https://myvcenter.dom.com/sdk", and the .Host property of a .NET URI object is just the DNS hostname portion of the URI)
+                    $strVcenterOfThisSearchIndex = ([System.Uri]$viewThisSearchIndex.Client.ServiceUrl).Host
+                    ## SearchIndex Find* methods return MoRefs; docs at http://pubs.vmware.com/vsphere-65/index.jsp#com.vmware.wssdk.apiref.doc/vim.SearchIndex.html
+                    #   FindAllByUuid(moref datacenter*, string uuid, bool vmSearch, bool instanceUuid*)
+                    $viewThisSearchIndex.FindAllByUuid($null, $Uuid, $true, $false) | Select-Object -Unique | Foreach-Object {Get-View -Id $_ -Property Name, Config.Uuid -Server $strVcenterOfThisSearchIndex} | Select-Object -Unique -Property $arrPropertiesForReturnWhenSearchByUuid
+                } ## end foreach-object
+                break
+            } ## end case
+            "FindByIPWildcard" {
                 ## scriptblock to use for the Where clause in finding VMs
-                $sblkFindByIP_WhereStatement = if ($PsCmdlet.ParameterSetName -eq "FindByIPWildcard") {{$_.IpAddress | Where-Object {$_ -like $AddressWildcard}}} else {{$_.IpAddress -contains $IP}}
+                $sblkFindByIP_WhereStatement = {$_.IpAddress | Where-Object {$_ -like $AddressWildcard}}
                 ## return the .Net View object(s) for the VM(s) with the NIC(s) w/ the given IP
-                Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object Name, @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, MoRef
+                Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object -Property $arrPropertiesForReturnWhenSearchByIP
             } ## end case
         } ## end switch
     } ## end process
