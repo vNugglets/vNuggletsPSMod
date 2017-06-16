@@ -4,8 +4,12 @@
 
 - \[improvement] updated function `Get-VNVMByAddress`:
   - greatly increased speed by using `VMware.Vim.SearchIndex` for by-IP searches (does support wildcard, though -- by wildcard still uses slower mechanism); example speed increase: went from 13s to about 0.25s in a vCenter with about 7,500 VMs -- woo-hoo!
-  - added new parameters `-GuestHostname` and `-UUID` to support for searching by guest DNS name or VM BIOS UUID (these also use a method of `VMware.Vim.SearchIndex`, so the searches are super fast)
-
+  - added new parameters `-GuestHostname` and `-UUID` to support for searching by guest DNS name or VM BIOS UUID, respectively (these also use a method of `VMware.Vim.SearchIndex`, so the searches are super fast)
+- \[improvement] updated function `Copy-VNVIRole`:
+  - takes new parameter, `-SourceRole`, for passing VIRole object itself as value, and this parameter accepts value from pipeline, for more natural use of cmdlet
+  - deduces source vCenter server from `-SourceRole` value, simplifying use of cmdlet (no need to specify `-SourceVCName` parameter when providing the source VIRole object)
+  - `-DestinationVCName` parameter now optional, further simplifying use of cmdlet; if parameter not specified, destination vCenter will be the same as the source vCenter
+  
 
 #### v1.1, released 20 Dec 2016
 

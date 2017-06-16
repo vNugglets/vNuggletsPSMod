@@ -1064,49 +1064,65 @@ function Copy-VNVIRole {
     This assumes that connections to source/destination vCenter(s) are already established.  If role of given name already exists in destination vCenter, this attempt will stop.
 
     .Example
-    Copy-VNVIRole -SourceRoleName SysAdm -DestinationRoleName SysAdm_copyTest -SourceVCName vcenter.dom.com -DestinationVCName othervcenter.dom.com
-    Copy the VIRole "SysAdm" from the given source vCenter to a new VIRole named "SysAdm_copyTest" in the given destination vCenter
+    Get-VIRole -Server vcenter.dom.com -Name SysAdm | Copy-VNVIRole -DestinationVCName othervcenter.dom.com
+    Copy the VIRole "SysAdm" from the given source vCenter (taken from pipeline) to a new VIRole of the same name as the source VIRole and in the given destination vCenter
 
     .Example
-    Copy-VNVIRole -SourceRoleName MyTestRole0 -DestinationRoleName SomeRole_copyTest -SourceVCName vcenter.dom.com -DestinationVCName vcenter.dom.com
-    Copy the given VIRole from the given source vCenter to a new VIRole named "SysAdm_copyTest" in the _same_ vCenter
+    Get-VIRole -Server vcenter.dom.com -Name TestRole0 | Copy-VNVIRole -DestinationRoleName TestRole0_copy
+    Make a copy the VIRole with the new role name in the source vCenter
+
+    .Example
+    Copy-VNVIRole -SourceRoleName SysAdm -DestinationRoleName SysAdm_copyTest -SourceVCName vcenter.dom.com -DestinationVCName othervcenter.dom.com
+    Copy the VIRole "SysAdm" from the given source vCenter to a new VIRole named "SysAdm_copyTest" in the given destination vCenter
 
     .Link
     http://vNugglets.com
 
     .Outputs
-    VMware.VimAutomation.Types.PermissionManagement.Role if role is created/updated, String in Warning stream and nothing in standard out otherwise
+    VMware.VimAutomation.Types.PermissionManagement.Role if role is created/updated, String in Warning stream and/or Error object, and nothing in standard out otherwise
 #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     [OutputType([VMware.VimAutomation.Types.PermissionManagement.Role])]
     param(
+        ## Source VIRole object to copy
+        [parameter(Mandatory=$true, ValueFromPipeline=$true, ParameterSetName="SourceVIRoleByObj")][VMware.VimAutomation.Types.PermissionManagement.Role]$SourceRole,
+
         ## Name of the source VIRole
-        [parameter(Mandatory=$true,Position=0)][string]$SourceRoleName,
+        [parameter(Mandatory=$true,Position=0, ParameterSetName="SourceVIRoleByName")][string]$SourceRoleName,
 
         ## Name to use for new destination VIRole. If none, will use name from source role
-        [parameter(Mandatory=$true,Position=1)][string]$DestinationRoleName,
+        [parameter(Position=1)][string]$DestinationRoleName,
 
         ## Source vCenter connection name
-        [parameter(Mandatory=$true)][string]$SourceVCName,
+        [parameter(Mandatory=$true, ParameterSetName="SourceVIRoleByName")][string]$SourceVCName,
 
-        ## Destination vCenter connection name (to copy VIRole to same vCenter, use same vCenter name for destination as used for source)
-        [parameter(Mandatory=$true)][string]$DestinationVCName
+        ## Destination vCenter connection name, if different from source vCenter (to copy VIRole to same vCenter, either do not use this parameter, or use same vCenter name for destination as used for source)
+        [string]$DestinationVCName
     ) ## end param
 
     process {
-        ## get the VIRole from the source vCenter
-        $oSrcVIRole = Get-VIRole -Server $SourceVCName -Name $SourceRoleName -ErrorAction:SilentlyContinue
-        ## if the role does not exist in the source vCenter
-        if ($null -eq $oSrcVIRole) {Throw "VIRole '$SourceRoleName' does not exist in source vCenter '$SourceVCName'. No source VIRole from which to copy"}
-        if (-not $PSBoundParameters.ContainsKey("DestinationRoleName")) {$DestinationRoleName = $oSrcVIRole.Name}
+        $oSrcVIRole = Switch ($PSCmdlet.ParameterSetName) {
+            "SourceVIRoleByObj" {$SourceRole; break}
+            "SourceVIRoleByName" {
+                ## get the VIRole from the source vCenter
+                try {Get-VIRole -Server $SourceVCName -Name $SourceRoleName -ErrorAction:Stop}
+                ## if there was issue getting the role from the source vCenter
+                catch {
+                    Write-Warning "Issue getting '$SourceRoleName' from source vCenter '$SourceVCName'. Is connection to vCenter ok, and does that VIRole exist there?"
+                    $PsCmdlet.ThrowTerminatingError($_)
+                } ## end catch
+            } ## end case
+        } ## end switch
+        $strDestVIRoleName = if ($PSBoundParameters.ContainsKey("DestinationRoleName")) {$DestinationRoleName} else {$oSrcVIRole.Name}
+        $strDestVCName = if ($PSBoundParameters.ContainsKey("DestinationVCName")) {$DestinationVCName} else {$oSrcVIRole.Server}
         ## see if there is VIRole by the given name in the destination vCenter
-        $oDestVIRole = Get-VIRole -Server $DestinationVCName -Name $DestinationRoleName -ErrorAction:SilentlyContinue
+        $oDestVIRole = Get-VIRole -Server $strDestVCName -Name $strDestVIRoleName -ErrorAction:SilentlyContinue
 
         ## if the role already exists in the destination vCenter
-        if ($null -ne $oDestVIRole) {Throw "VIRole '$DestinationRoleName' already exists in destination vCenter '$DestinationVCName'"}
+        if ($null -ne $oDestVIRole) {Throw "VIRole '$strDestVIRoleName' already exists in destination vCenter '$strDestVCName'"}
         ## else, create the role
         else {
-            New-VIRole -Server $DestinationVCName -Name $DestinationRoleName -Privilege (Get-VIPrivilege -Server $DestinationVCName -Id $oSrcVIRole.PrivilegeList)
+            New-VIRole -Server $strDestVCName -Name $strDestVIRoleName -Privilege (Get-VIPrivilege -Server $strDestVCName -Id $oSrcVIRole.PrivilegeList)
         } ## end else
     } ## end process
 } ## end fn
