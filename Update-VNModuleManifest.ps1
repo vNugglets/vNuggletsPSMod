@@ -18,19 +18,24 @@ begin {
 		FunctionsToExport = Write-Output Connect-VNVIServer Copy-VNVIRole Disconnect-VNVIServer Find-VNVMWithDuplicateMACAddress Get-VNNetworkClusterInfo Get-VNUplinkNicForVM Get-VNVMByAddress Get-VNVMByRDM Get-VNVMByVirtualPortGroup Get-VNVMDiskAndRDM Get-VNVMEVCInfo Get-VNVMHostBrokenUplink Get-VNVMHostFirmwareInfo Get-VNVMHostHBAWWN Get-VNVMHostLogicalVolumeInfo Get-VNVMHostNICFirmwareAndDriverInfo Invoke-VNEvacuateDatastore Move-VNTemplateFromVMHost Update-VNTitleBarForPowerCLI
 		IconUri = "http://static.vnugglets.com/imgs/vNuggletsLogo.jpg"
 		LicenseUri = "https://github.com/vNugglets/vNuggletsPSMod/blob/master/License"
+		NestedModules = Write-Output vNuggletsUtilityMod_functions.ps1 vNugglets_SupportingFunctions.ps1
 		# PassThru = $true
 		ProjectUri = "https://github.com/vNugglets/vNuggletsPSMod"
 		ReleaseNotes = "See release notes at https://github.com/vNugglets/vNuggletsPSMod/blob/master/ChangeLog.md"
+		## relies on a centrally-important VMware PowerCLI module
+		RequiredModules = "VMware.VimAutomation.Core"
 		Tags = Write-Output vNugglets vNugglets.com "VMware vSphere" FaF PowerCLI VIRole "MAC Address" VM RDM vPG "Virtual Portgroup" EVC VMHost HBA Datastore
-		Verbose = $true
+		# Verbose = $true
 	} ## end hashtable
 } ## end begin
 
 process {
-	## do the actual module manifest update
-	PowerShellGet\Update-ModuleManifest @hshModManifestParams
-	## replace the comment in the resulting module manifest that includes "PSGet_" prefixed to the actual module name with a line without "PSGet_" in it
-	(Get-Content -Path $strFilespecForPsd1 -Raw).Replace("# Module manifest for module 'PSGet_vNugglets.Utility'", "# Module manifest for module 'vNugglets.Utility'") | Set-Content -Path $strFilespecForPsd1
+	if ($PsCmdlet.ShouldProcess($strFilespecForPsd1, "Update module manifest")) {
+		## do the actual module manifest update
+		PowerShellGet\Update-ModuleManifest @hshModManifestParams
+		## replace the comment in the resulting module manifest that includes "PSGet_" prefixed to the actual module name with a line without "PSGet_" in it
+		(Get-Content -Path $strFilespecForPsd1 -Raw).Replace("# Module manifest for module 'PSGet_vNugglets.Utility'", "# Module manifest for module 'vNugglets.Utility'") | Set-Content -Path $strFilespecForPsd1
+	} ## end if
 } ## end prcoess
 
 
