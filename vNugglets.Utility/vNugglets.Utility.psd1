@@ -108,7 +108,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = 'vNugglets','vNugglets.com','VMware vSphere','FaF','PowerCLI','VIRole','MAC Address','VM','RDM','vPG','Virtual Portgroup','EVC','VMHost','HBA','Datastore'
+        Tags = 'vNugglets','vNugglets.com','VMware','vSphere','FaF','PowerCLI','VIRole','MAC','VM','RDM','vPG','VirtualPortgroup','EVC','VMHost','HBA','Datastore'
 
         # A URL to the license for this module.
         LicenseUri = 'https://github.com/vNugglets/vNuggletsPSMod/blob/master/License'
