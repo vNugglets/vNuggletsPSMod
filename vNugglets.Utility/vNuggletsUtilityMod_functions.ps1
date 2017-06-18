@@ -227,9 +227,9 @@ function Get-VNVMByAddress {
 
     .Example
     Get-VNVMByAddress -IP 10.37.31.12
-    Name     IP                                         MoRef
-    ------   ---                                        -----
-    myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13
+    Name     IP                                         MoRef                  Client
+    ------   ---                                        -----                  ------
+    myvm10   {192.16.13.1, 10.37.31.12, fe80::000...}   VirtualMachine-vm-13   VMware.Vim.VimClientImpl
 
     Get VMs with given IP as reported by VMware Tools, return VM name and its IP addresses
 
@@ -242,13 +242,29 @@ function Get-VNVMByAddress {
 
     Use -AddressWildcard to find VMs with approximate IP
 
+    .Example
+    Get-VNVMByAddress -IP 10.37.31.12
+    Name     GuestHostname    MoRef                  Client
+    ------   -------------    -----                  ------
+    myvm10   myvm10.dom.com   VirtualMachine-vm-13   VMware.Vim.VimClientImpl
+
+    Get VMs with given hostname configured in the guest OS as reported by VMware Tools, return VM name and its guest hostname
+
+    .Example
+    Get-VNVMByAddress -Uuid b99b546a-ee00-43f3-856a-80779ffddd0e
+    Name     Uuid                                   MoRef                     Client
+    ------   ----                                   -----                     ------
+    myvm37   b99b546a-ee00-43f3-856a-80779ffddd0e   VirtualMachine-vm-19991   VMware.Vim.VimClientImpl
+
+    Get VMs with given SMBIOS UUID, return VM name and its UUID
+
     .Link
     Get-VNVMByRDM
     Get-VNVMByVirtualPortGroup
     http://vNugglets.com
 
     .Notes
-    Finding VMs by IP address relies on information returned from VMware Tools in the guest, so those must be installed in the guest and have been running in the guest at least recently.
+    Finding VMs by IP address / Guest hostname relies on information returned from VMware Tools in the guest, so VMware Tools must be installed in the guest and have been running in the guest at least recently.
 
     .Outputs
     Selected.VMware.Vim.VirtualMachine
@@ -263,8 +279,21 @@ function Get-VNVMByAddress {
         [parameter(Mandatory=$true,ParameterSetName="FindByIP",Position=0)][ValidateScript({[bool][System.Net.IPAddress]::Parse($_)})][string]$IP,
 
         ## wildcard string IP address (standard wildcards like "10.0.0.*"), if finding VM by approximate IP
-        [parameter(Mandatory=$true,ParameterSetName="FindByIPWildcard",Position=0)][string]$AddressWildcard
+        [parameter(Mandatory=$true,ParameterSetName="FindByIPWildcard",Position=0)][string]$AddressWildcard,
+
+        ## Fully qualified DNS hostname as it appears in guest OS, for finding VM by guest hostname
+        [parameter(Mandatory=$true,ParameterSetName="FindByGuestHostname",Position=0)][string]$GuestHostname,
+
+        ## VM SMBIOS UUID, for finding VM by UUID
+        [parameter(Mandatory=$true,ParameterSetName="FindByUuid",Position=0)][string]$Uuid
     ) ## end param
+
+    begin {
+        ## array of properties to select on VirtualMachine object return when searching by IP or IP Wildcard, by Guest hostname, etc.
+        $arrPropertiesForReturnWhenSearchByIP = "Name", @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, "MoRef", "Client"
+        $arrPropertiesForReturnWhenSearchByGuestHostname = "Name", @{n="GuestHostname"; e={$_.Guest.HostName}}, "MoRef", "Client"
+        $arrPropertiesForReturnWhenSearchByUuid = "Name", @{n="Uuid"; e={$_.Config.Uuid}}, "MoRef", "Client"
+    } ## end begin
 
     Process {
         Switch ($PsCmdlet.ParameterSetName) {
@@ -273,11 +302,44 @@ function Get-VNVMByAddress {
                 Get-View -Viewtype VirtualMachine -Property Name, Config.Hardware.Device | Where-Object {$_.Config.Hardware.Device | Where-Object {($_ -is [VMware.Vim.VirtualEthernetCard]) -and ($MAC -contains $_.MacAddress)}} | Select-Object Name, @{n="MacAddress"; e={$_.Config.Hardware.Device | Where-Object {$_ -is [VMware.Vim.VirtualEthernetCard]} | Foreach-Object {$_.MacAddress} | Sort-Object}}, MoRef
                 break
             } ## end case
-            {"FindByIp","FindByIPWildcard" -contains $_} {
+            "FindByIp" {
+                ## get the SearchIndex object(s) (one from each connected vCenter)
+                Get-View -Id SearchIndex-SearchIndex -PipelineVariable viewThisSearchIndex | Foreach-Object {
+                    ## the vCenter name for this SearchIndex (ServiceUrl is like "https://myvcenter.dom.com/sdk", and the .Host property of a .NET URI object is just the DNS hostname portion of the URI)
+                    $strVcenterOfThisSearchIndex = ([System.Uri]$viewThisSearchIndex.Client.ServiceUrl).Host
+                    ## SearchIndex Find* methods return MoRefs; docs at http://pubs.vmware.com/vsphere-65/index.jsp#com.vmware.wssdk.apiref.doc/vim.SearchIndex.html
+                    #   FindAllByIp(moref datacenter*, string ip, bool vmSearch)
+                    $viewThisSearchIndex.FindAllByIp($null, $IP, $true) | Select-Object -Unique | Foreach-Object {Get-View -Id $_ -Property Name, Guest.Net -Server $strVcenterOfThisSearchIndex} | Select-Object -Property $arrPropertiesForReturnWhenSearchByIP
+                } ## end foreach-object
+                break
+            } ## end case
+            "FindByGuestHostname" {
+                ## get the SearchIndex object(s) (one from each connected vCenter)
+                Get-View -Id SearchIndex-SearchIndex -PipelineVariable viewThisSearchIndex | Foreach-Object {
+                    ## the vCenter name for this SearchIndex (ServiceUrl is like "https://myvcenter.dom.com/sdk", and the .Host property of a .NET URI object is just the DNS hostname portion of the URI)
+                    $strVcenterOfThisSearchIndex = ([System.Uri]$viewThisSearchIndex.Client.ServiceUrl).Host
+                    ## SearchIndex Find* methods return MoRefs; docs at http://pubs.vmware.com/vsphere-65/index.jsp#com.vmware.wssdk.apiref.doc/vim.SearchIndex.html
+                    #   FindAllByDnsName(moref datacenter*, string dnsName, bool vmSearch)
+                    $viewThisSearchIndex.FindAllByDnsName($null, $GuestHostname, $true) | Select-Object -Unique | Foreach-Object {Get-View -Id $_ -Property Name, Guest.HostName -Server $strVcenterOfThisSearchIndex} | Select-Object -Unique -Property $arrPropertiesForReturnWhenSearchByGuestHostname
+                } ## end foreach-object
+                break
+            } ## end case
+            "FindByUuid" {
+                ## get the SearchIndex object(s) (one from each connected vCenter)
+                Get-View -Id SearchIndex-SearchIndex -PipelineVariable viewThisSearchIndex | Foreach-Object {
+                    ## the vCenter name for this SearchIndex (ServiceUrl is like "https://myvcenter.dom.com/sdk", and the .Host property of a .NET URI object is just the DNS hostname portion of the URI)
+                    $strVcenterOfThisSearchIndex = ([System.Uri]$viewThisSearchIndex.Client.ServiceUrl).Host
+                    ## SearchIndex Find* methods return MoRefs; docs at http://pubs.vmware.com/vsphere-65/index.jsp#com.vmware.wssdk.apiref.doc/vim.SearchIndex.html
+                    #   FindAllByUuid(moref datacenter*, string uuid, bool vmSearch, bool instanceUuid*)
+                    $viewThisSearchIndex.FindAllByUuid($null, $Uuid, $true, $false) | Select-Object -Unique | Foreach-Object {Get-View -Id $_ -Property Name, Config.Uuid -Server $strVcenterOfThisSearchIndex} | Select-Object -Unique -Property $arrPropertiesForReturnWhenSearchByUuid
+                } ## end foreach-object
+                break
+            } ## end case
+            "FindByIPWildcard" {
                 ## scriptblock to use for the Where clause in finding VMs
-                $sblkFindByIP_WhereStatement = if ($PsCmdlet.ParameterSetName -eq "FindByIPWildcard") {{$_.IpAddress | Where-Object {$_ -like $AddressWildcard}}} else {{$_.IpAddress -contains $IP}}
+                $sblkFindByIP_WhereStatement = {$_.IpAddress | Where-Object {$_ -like $AddressWildcard}}
                 ## return the .Net View object(s) for the VM(s) with the NIC(s) w/ the given IP
-                Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object Name, @{n="IP"; e={$_.Guest.Net | Foreach-Object {$_.IpAddress} | Sort-Object}}, MoRef
+                Get-View -Viewtype VirtualMachine -Property Name, Guest.Net | Where-Object {$_.Guest.Net | Where-Object $sblkFindByIP_WhereStatement} | Select-Object -Property $arrPropertiesForReturnWhenSearchByIP
             } ## end case
         } ## end switch
     } ## end process
@@ -1002,49 +1064,65 @@ function Copy-VNVIRole {
     This assumes that connections to source/destination vCenter(s) are already established.  If role of given name already exists in destination vCenter, this attempt will stop.
 
     .Example
-    Copy-VNVIRole -SourceRoleName SysAdm -DestinationRoleName SysAdm_copyTest -SourceVCName vcenter.dom.com -DestinationVCName othervcenter.dom.com
-    Copy the VIRole "SysAdm" from the given source vCenter to a new VIRole named "SysAdm_copyTest" in the given destination vCenter
+    Get-VIRole -Server vcenter.dom.com -Name SysAdm | Copy-VNVIRole -DestinationVCName othervcenter.dom.com
+    Copy the VIRole "SysAdm" from the given source vCenter (taken from pipeline) to a new VIRole of the same name as the source VIRole and in the given destination vCenter
 
     .Example
-    Copy-VNVIRole -SourceRoleName MyTestRole0 -DestinationRoleName SomeRole_copyTest -SourceVCName vcenter.dom.com -DestinationVCName vcenter.dom.com
-    Copy the given VIRole from the given source vCenter to a new VIRole named "SysAdm_copyTest" in the _same_ vCenter
+    Get-VIRole -Server vcenter.dom.com -Name TestRole0 | Copy-VNVIRole -DestinationRoleName TestRole0_copy
+    Make a copy the VIRole with the new role name in the source vCenter
+
+    .Example
+    Copy-VNVIRole -SourceRoleName SysAdm -DestinationRoleName SysAdm_copyTest -SourceVCName vcenter.dom.com -DestinationVCName othervcenter.dom.com
+    Copy the VIRole "SysAdm" from the given source vCenter to a new VIRole named "SysAdm_copyTest" in the given destination vCenter
 
     .Link
     http://vNugglets.com
 
     .Outputs
-    VMware.VimAutomation.Types.PermissionManagement.Role if role is created/updated, String in Warning stream and nothing in standard out otherwise
+    VMware.VimAutomation.Types.PermissionManagement.Role if role is created/updated, String in Warning stream and/or Error object, and nothing in standard out otherwise
 #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     [OutputType([VMware.VimAutomation.Types.PermissionManagement.Role])]
     param(
+        ## Source VIRole object to copy
+        [parameter(Mandatory=$true, ValueFromPipeline=$true, ParameterSetName="SourceVIRoleByObj")][VMware.VimAutomation.Types.PermissionManagement.Role]$SourceRole,
+
         ## Name of the source VIRole
-        [parameter(Mandatory=$true,Position=0)][string]$SourceRoleName,
+        [parameter(Mandatory=$true,Position=0, ParameterSetName="SourceVIRoleByName")][string]$SourceRoleName,
 
         ## Name to use for new destination VIRole. If none, will use name from source role
-        [parameter(Mandatory=$true,Position=1)][string]$DestinationRoleName,
+        [parameter(Position=1)][string]$DestinationRoleName,
 
         ## Source vCenter connection name
-        [parameter(Mandatory=$true)][string]$SourceVCName,
+        [parameter(Mandatory=$true, ParameterSetName="SourceVIRoleByName")][string]$SourceVCName,
 
-        ## Destination vCenter connection name (to copy VIRole to same vCenter, use same vCenter name for destination as used for source)
-        [parameter(Mandatory=$true)][string]$DestinationVCName
+        ## Destination vCenter connection name, if different from source vCenter (to copy VIRole to same vCenter, either do not use this parameter, or use same vCenter name for destination as used for source)
+        [string]$DestinationVCName
     ) ## end param
 
     process {
-        ## get the VIRole from the source vCenter
-        $oSrcVIRole = Get-VIRole -Server $SourceVCName -Name $SourceRoleName -ErrorAction:SilentlyContinue
-        ## if the role does not exist in the source vCenter
-        if ($null -eq $oSrcVIRole) {Throw "VIRole '$SourceRoleName' does not exist in source vCenter '$SourceVCName'. No source VIRole from which to copy"}
-        if (-not $PSBoundParameters.ContainsKey("DestinationRoleName")) {$DestinationRoleName = $oSrcVIRole.Name}
+        $oSrcVIRole = Switch ($PSCmdlet.ParameterSetName) {
+            "SourceVIRoleByObj" {$SourceRole; break}
+            "SourceVIRoleByName" {
+                ## get the VIRole from the source vCenter
+                try {Get-VIRole -Server $SourceVCName -Name $SourceRoleName -ErrorAction:Stop}
+                ## if there was issue getting the role from the source vCenter
+                catch {
+                    Write-Warning "Issue getting '$SourceRoleName' from source vCenter '$SourceVCName'. Is connection to vCenter ok, and does that VIRole exist there?"
+                    $PsCmdlet.ThrowTerminatingError($_)
+                } ## end catch
+            } ## end case
+        } ## end switch
+        $strDestVIRoleName = if ($PSBoundParameters.ContainsKey("DestinationRoleName")) {$DestinationRoleName} else {$oSrcVIRole.Name}
+        $strDestVCName = if ($PSBoundParameters.ContainsKey("DestinationVCName")) {$DestinationVCName} else {$oSrcVIRole.Server}
         ## see if there is VIRole by the given name in the destination vCenter
-        $oDestVIRole = Get-VIRole -Server $DestinationVCName -Name $DestinationRoleName -ErrorAction:SilentlyContinue
+        $oDestVIRole = Get-VIRole -Server $strDestVCName -Name $strDestVIRoleName -ErrorAction:SilentlyContinue
 
         ## if the role already exists in the destination vCenter
-        if ($null -ne $oDestVIRole) {Throw "VIRole '$DestinationRoleName' already exists in destination vCenter '$DestinationVCName'"}
+        if ($null -ne $oDestVIRole) {Throw "VIRole '$strDestVIRoleName' already exists in destination vCenter '$strDestVCName'"}
         ## else, create the role
         else {
-            New-VIRole -Server $DestinationVCName -Name $DestinationRoleName -Privilege (Get-VIPrivilege -Server $DestinationVCName -Id $oSrcVIRole.PrivilegeList)
+            New-VIRole -Server $strDestVCName -Name $strDestVIRoleName -Privilege (Get-VIPrivilege -Server $strDestVCName -Id $oSrcVIRole.PrivilegeList)
         } ## end else
     } ## end process
 } ## end fn
