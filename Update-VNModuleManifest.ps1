@@ -24,7 +24,7 @@ begin {
 		ReleaseNotes = "See release notes at https://github.com/vNugglets/vNuggletsPSMod/blob/master/ChangeLog.md"
 		## relies on a centrally-important VMware PowerCLI module
 		RequiredModules = "VMware.VimAutomation.Core"
-		Tags = Write-Output vNugglets vNugglets.com "VMware vSphere" FaF PowerCLI VIRole "MAC Address" VM RDM vPG "Virtual Portgroup" EVC VMHost HBA Datastore
+		Tags = Write-Output vNugglets vNugglets.com VMware vSphere FaF PowerCLI VIRole MAC VM RDM vPG VirtualPortgroup EVC VMHost HBA Datastore
 		# Verbose = $true
 	} ## end hashtable
 } ## end begin
