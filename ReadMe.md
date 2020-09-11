@@ -1,5 +1,5 @@
 # vNugglets.Utility PowerShell Module
-[![PSGallery Version](https://img.shields.io/powershellgallery/v/vNugglets.VDNetworking.svg?style=flat&logo=powershell&label=PSGallery%20Version)](https://www.powershellgallery.com/packages/vNugglets.Utility) [![PSGallery Downloads](https://img.shields.io/powershellgallery/dt/vNugglets.VDNetworking.svg?style=flat&logo=powershell&label=PSGallery%20Downloads)](https://www.powershellgallery.com/packages/vNugglets.Utility)
+[![PSGallery Version](https://img.shields.io/powershellgallery/v/vNugglets.Utility.svg?style=flat&logo=powershell&label=PSGallery%20Version)](https://www.powershellgallery.com/packages/vNugglets.Utility) [![PSGallery Downloads](https://img.shields.io/powershellgallery/dt/vNugglets.Utility.svg?style=flat&logo=powershell&label=PSGallery%20Downloads)](https://www.powershellgallery.com/packages/vNugglets.Utility)
 
 Contents:
 
