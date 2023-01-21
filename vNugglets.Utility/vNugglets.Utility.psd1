@@ -27,7 +27,7 @@ Author = 'Matt Boren'
 CompanyName = 'vNugglets.com'
 
 # Copyright statement for this module
-Copyright = 'Apache 2.0 License'
+Copyright = 'MIT License'
 
 # Description of the functionality provided by this module
 Description = 'Module with the super useful functions that were previously scattered about the web by the vNugglets team (particularly, at vNugglets.com)'
@@ -66,19 +66,19 @@ RequiredModules = @('VMware.VimAutomation.Core')
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @('vNuggletsUtilityMod_functions.ps1', 
+NestedModules = @('vNuggletsUtilityMod_functions.ps1',
                'vNugglets_SupportingFunctions.ps1')
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Connect-VNVIServer', 'Copy-VNVIRole', 'Disconnect-VNVIServer', 
-               'Find-VNVMWithDuplicateMACAddress', 'Get-VNInventoryType', 
-               'Get-VNNetworkClusterInfo', 'Get-VNUplinkNicForVM', 
-               'Get-VNVMByAddress', 'Get-VNVMByRDM', 'Get-VNVMByVirtualPortGroup', 
-               'Get-VNVMDiskAndRDM', 'Get-VNVMEVCInfo', 'Get-VNVMHostBrokenUplink', 
-               'Get-VNVMHostFirmwareInfo', 'Get-VNVMHostHBAWWN', 
-               'Get-VNVMHostLogicalVolumeInfo', 
-               'Get-VNVMHostNICFirmwareAndDriverInfo', 
-               'Invoke-VNEvacuateDatastore', 'Move-VNTemplateFromVMHost', 
+FunctionsToExport = 'Connect-VNVIServer', 'Copy-VNVIRole', 'Disconnect-VNVIServer',
+               'Find-VNVMWithDuplicateMACAddress', 'Get-VNInventoryType',
+               'Get-VNNetworkClusterInfo', 'Get-VNUplinkNicForVM',
+               'Get-VNVMByAddress', 'Get-VNVMByRDM', 'Get-VNVMByVirtualPortGroup',
+               'Get-VNVMDiskAndRDM', 'Get-VNVMEVCInfo', 'Get-VNVMHostBrokenUplink',
+               'Get-VNVMHostFirmwareInfo', 'Get-VNVMHostHBAWWN',
+               'Get-VNVMHostLogicalVolumeInfo',
+               'Get-VNVMHostNICFirmwareAndDriverInfo',
+               'Invoke-VNEvacuateDatastore', 'Move-VNTemplateFromVMHost',
                'Update-VNTitleBarForPowerCLI'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -88,7 +88,7 @@ CmdletsToExport = @()
 # VariablesToExport = @()
 
 # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-AliasesToExport = 'ConnVIServer', 'VNConnVIServer', 'DisconnVIServer', 
+AliasesToExport = 'ConnVIServer', 'VNConnVIServer', 'DisconnVIServer',
                'VNDisconnVIServer'
 
 # DSC resources to export from this module
@@ -98,9 +98,9 @@ AliasesToExport = 'ConnVIServer', 'VNConnVIServer', 'DisconnVIServer',
 # ModuleList = @()
 
 # List of all files packaged with this module
-FileList = 'vNugglets.Utility.psd1', 'vNuggletsUtilityMod.psm1', 
-               'vNuggletsUtilityMod_functions.ps1', 
-               'vNugglets_SupportingFunctions.ps1', 
+FileList = 'vNugglets.Utility.psd1', 'vNuggletsUtilityMod.psm1',
+               'vNuggletsUtilityMod_functions.ps1',
+               'vNugglets_SupportingFunctions.ps1',
                'en-US\about_vNugglets.Utility.help.txt'
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.

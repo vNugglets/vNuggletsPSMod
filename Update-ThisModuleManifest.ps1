@@ -17,7 +17,7 @@ begin {
 		# Confirm = $true
 		Path = $strFilespecForPsd1
 		ModuleVersion = $ModuleVersion
-		Copyright = "Apache 2.0 License"
+		Copyright = "MIT License"
 		Description = "Module with the super useful functions that were previously scattered about the web by the vNugglets team (particularly, at vNugglets.com)"
 		## some aliases, both as written, and with "VN" prefixed on them
 		AliasesToExport = Write-Output ConnVIServer DisconnVIServer | Foreach-Object {$_; "VN$_"}
