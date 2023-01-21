@@ -1,6 +1,6 @@
 ### ChangeLog for vNugglets.Utility PowerShell module
 
-#### v1.3, released Jan 2023
+#### v1.3, released 21 Jan 2023
 
 - \[new] added function `Get-VNInventoryType` for getting more future-safer vSphere object types (follwing guidance from VMware)
 
