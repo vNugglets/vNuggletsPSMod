@@ -9,23 +9,6 @@
 
 Write-Verbose -Verbose "tests not yet fully written"
 
-<#
-Cmdlets for which to still write tests:
-Copy-VNVIRole
-Disconnect-VNVIServer
-Get-VNNetworkClusterInfo
-Get-VNUplinkNicForVM
-Get-VNVMByAddress
-Get-VNVMByRDM
-Get-VNVMByVirtualPortGroup
-Get-VNVMDiskAndRDM
-Get-VNVMEVCInfo
-Get-VNVMHostBrokenUplink
-Invoke-VNEvacuateDatastore
-Move-VNTemplateFromVMHost
-Update-VNTitleBarForPowerCLI
-#>
-
 $oTestVMHost = Get-VMHost -State Connected | Select-Object -First 1
 
 ## array of objects, each with information about what and how to test for the given cmdlet; used to create, for each cmdlet, the actual tests below

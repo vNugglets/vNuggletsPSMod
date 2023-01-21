@@ -18,6 +18,7 @@ Some of the functionality provided by the cmdlets in this module:
 - vCenter connection information (in title of PowerShell window)
 - Datastore evacuation, template evacuation from VMHosts
 - Mining virtual portgroup information (cluster-locations)
+- Determining parent/base vSphere object types for use in parameter type-ing in subsequent function development
 
 <a id="quickStart"></a>
 ### QuickStart
@@ -45,7 +46,7 @@ The [ChangeLog](ChangeLog.md) for this module is, of course, a log of the major 
 - download the module, either from the latest release's .zip file on the [vNugglets.Utility Releases](https://github.com/vNugglets/vNuggletsPSMod/releases) page, or by cloning the project to some local folder with Git via:
   `PS C:\> git clone https://github.com/vNugglets/vNuggletsPSMod.git C:\temp\MyVNuggsRepoCopy`
 - put the actual PowerShell module directory in some place that you like to keep your modules, say, like this, which copies the module to your personal Modules directory:
-  `PS C:\> Copy-Item -Recurse -Path C:\temp\MyVNuggsRepoCopy\vNugglets.Utility\ -Destination ~\Documents\WindowsPowerShell\Modules\vNugglets.Utility`
+  `PS C:\> Copy-Item -Recurse -Path C:\temp\MyVNuggsRepoCopy\vNugglets.Utility\ -Destination ~\Documents\PowerShell\Modules\vNugglets.Utility`
 - import the PowerShell module into the current PowerShell session:
   `PS C:\> Import-Module -Name vNugglets.Utility`
   or, if the vNugglets.Utility module folder is not in your `Env:\PSModulePath`, specify the whole path to the module folder, like:

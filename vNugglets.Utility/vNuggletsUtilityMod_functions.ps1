@@ -1428,3 +1428,45 @@ function Invoke-VNEvacuateDatastore {
         } ## end foreach-object
     } ## end process
 } ## end fn
+
+
+function Get-VNInventoryType {
+<#	.Description
+    Function to determine possible "correct" object type(s) to use from a vSphere inventory object, as described by Alan Renouf at http://blogs.vmware.com/PowerCLI/2016/04/powercli-best-practice-correct-use-strong-typing.html.
+
+    This is super helpful for when trying to determine most future-"safe" VMware object model types to use for parameter type-ing for our own functions/cmdlets
+
+    .Example
+    Get-DatastoreCluster myDSCluster0 | Get-VNInventoryType
+    Name              FullName
+    ----              --------
+    DatastoreCluster  VMware.VimAutomation.ViCore.Types.V1.DatastoreManagement.DatastoreCluster
+
+    .Example
+    Get-VM myVM0 | Get-VNInventoryType -ReturnTypesType
+    Get the parent types of the VM object's type that include ".Types." in the name, of which "VMware.VimAutomation.Types.VirtualMachine" is probably a winner for subsequent use
+#>
+    [CmdletBinding()]
+    [OutputType([System.Type])]
+    param(
+        ## The vSphere object(s) for which to get so-called "safe" or "correct" Types for use in code
+        [parameter(mandatory=$true,ValueFromPipeline=$true)][VMware.VimAutomation.Sdk.Types.V1.VIObjectCore[]]$RelatedObject,
+
+        ## Switch:  return all types for this object type that contain ".Types." in their full name? (instead of just ones that match the "Impl" type name without the "Impl" string in them)
+        [Switch]$ReturnTypesType
+    ) ## end param
+
+    process {
+        $RelatedObject | Foreach-Object {
+            $oThisEntity = $_
+            $oThisEntityType = $_.GetType()
+            ## if "return all .Types.* types" switch is $true, return the full list of supported ".Types." types for this object
+            $(if ($ReturnTypesType) {$oThisEntityType.GetInterfaces() | Where-Object {$_.FullName -like "*.Types.*"}}
+            else {
+                ## get the "future-safer" full type info for this object type, if any (essentially the same typename, but without the "Impl" portion in the it, if there is such a type)
+                $oThisEntityType.GetInterfaces() | Where-Object {($_.FullName -like "*.Types.*") -and ($_.Name -eq $oThisEntityType.Name.Replace("Impl", ""))}
+            } ## end else
+            ) | Select-Object Name, FullName, @{n="RelatedObject"; e={$oThisEntity}}
+        } ## end foreach-object
+    } ## end process
+}

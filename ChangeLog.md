@@ -1,5 +1,9 @@
 ### ChangeLog for vNugglets.Utility PowerShell module
 
+#### v1.3, released 21 Jan 2023
+
+- \[new] added function `Get-VNInventoryType` for getting more future-safer vSphere object types (follwing guidance from VMware)
+
 #### v1.2, released 18 Jun 2017
 
 - \[improvement] updated function `Get-VNVMByAddress`:
@@ -12,7 +16,7 @@
 - \[internal improvement] updated module prepartion to use `Update-ModuleManifest` for keeping module manifest in shape
   - added manifest entries for tags and for URIs for project, release notes, license, etc.
   - prepared for publishing to the [PowerShellGallery](https://www.powershellgallery.com/))
-  
+
 
 #### v1.1, released 20 Dec 2016
 
